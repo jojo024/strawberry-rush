@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Strawberry Rush 🍓</title>
+<!--
+  CSP note: all scripts are same-origin files, no inline JS, no eval, no
+  external resources. When hosting, serve with:
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self'
+  (No meta tag here so the game also runs from a plain file:// double-click.)
+-->
+<style>
+  :root {
+    --wim-green: #12351f;
+    --wim-purple: #4a2377;
+    --cream: #f5f0e4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(ellipse at 50% -20%, #1d4a2c, var(--wim-green));
+    color: var(--cream);
+    font-family: Georgia, 'Times New Roman', serif;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100%; padding: 10px;
+    touch-action: manipulation; /* kill double-tap zoom on mobile */
+  }
+  h1 {
+    font-size: clamp(1.2rem, 3.5vw, 1.9rem);
+    letter-spacing: 0.06em; font-weight: normal;
+    margin: 4px 0 2px;
+  }
+  h1 .straw { color: #e8536a; }
+  #hud {
+    display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap;
+    justify-content: center;
+    font-size: clamp(0.8rem, 2.2vw, 1rem);
+    margin-bottom: 6px; min-height: 1.4em;
+  }
+  #hud-berries { font-size: 1.15em; }
+  #hud-dash { color: #b9a8d6; }
+  #hud-dash.armed {
+    color: #ffd740; font-weight: bold;
+    animation: glow 0.9s ease-in-out infinite alternate;
+  }
+  #hud-sloth { color: #ff8a80; font-style: italic; }
+  @keyframes glow { from { opacity: 0.75; } to { opacity: 1; } }
+  .pulse { animation: pop 0.35s ease-out; }
+  @keyframes pop { 30% { transform: scale(1.35); } 100% { transform: scale(1); } }
+  #stagewrap { position: relative; line-height: 0; }
+  canvas {
+    max-width: min(96vw, 560px);
+    max-height: 76vh;
+    width: auto; height: auto;
+    border: 3px solid var(--wim-purple);
+    border-radius: 8px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  }
+  #overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(18, 30, 20, 0.78);
+    border-radius: 8px; line-height: 1.5;
+    padding: 24px; text-align: center;
+  }
+  #overlay.hidden, #hud-sloth.hidden { display: none; }
+  #overlay-title { font-size: clamp(1.4rem, 5vw, 2.4rem); margin-bottom: 12px; }
+  #overlay-sub { font-size: clamp(0.85rem, 2.6vw, 1.05rem); max-width: 42ch; }
+  footer {
+    margin-top: 8px; font-size: 0.75rem; opacity: 0.55; text-align: center;
+  }
+</style>
+</head>
+<body>
+  <h1>STRAWBERRY <span class="straw">RUSH</span></h1>
+  <div id="hud">
+    <span id="hud-berries">🍓 0</span>
+    <span id="hud-dash">dash at 3 🍓</span>
+    <span id="hud-stage"></span>
+    <span id="hud-sloth" class="hidden">losing strawberries — move!</span>
+  </div>
+  <div id="stagewrap">
+    <canvas id="game" width="624" height="576"></canvas>
+    <div id="overlay" class="hidden">
+      <div id="overlay-title"></div>
+      <div id="overlay-sub"></div>
+    </div>
+  </div>
+  <footer>arrows / WASD to hop · double-tap a direction to dash ·
+    swipe on touch · avoid the crowd, the flashes, and standing still</footer>
+  <script src="src/logic.js"></script>
+  <script src="src/render.js"></script>
+  <script src="src/input.js"></script>
+  <script src="src/main.js"></script>
+</body>
+</html>
