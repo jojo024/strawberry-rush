@@ -1,0 +1,17 @@
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Node (no runtime deps, but keep clean if anything gets installed)
+node_modules/
+npm-debug.log*
+
+# Local scratch
+*.local

@@ -1,0 +1,9 @@
+{
+  "name": "strawberry-rush",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser arcade minigame: a broadcast engineer crosses a posh Wimbledon crowd to reach the food trucks.",
+  "scripts": {
+    "test": "node --test test/"
+  }
+}
