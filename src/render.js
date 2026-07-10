@@ -897,6 +897,127 @@
     ctx.beginPath(); ctx.arc(cx, sy, R, Math.PI - 0.7, Math.PI + 0.7); ctx.stroke();
   }
 
+  // What the player is carrying/wearing — every purchase shows on the body.
+  function hasGear(game, key) { return game.loadout && game.loadout.items.indexOf(key) !== -1; }
+  function gearUp(game, key) { return !!(game.loadout && game.loadout.upgraded && game.loadout.upgraded[key]); }
+  function heartShape(ctx, x, y, s) {
+    ctx.beginPath();
+    ctx.moveTo(x, y + s * 0.9);
+    ctx.bezierCurveTo(x - s * 1.3, y - s * 0.2, x - s * 0.4, y - s * 1.1, x, y - s * 0.3);
+    ctx.bezierCurveTo(x + s * 0.4, y - s * 1.1, x + s * 1.3, y - s * 0.2, x, y + s * 0.9);
+    ctx.fill();
+  }
+
+  /**
+   * Draw equipped-gear indicators on the player. cx/cy/bw/bh match the body
+   * drawn by drawPlayer; hy/hr locate the head. Upgraded items get a visibly
+   * distinct look (carbon racket, gold pass, bigger gobstopper, …).
+   */
+  function drawPlayerGear(ctx, game, cx, cy, bw, bh, sc) {
+    if (!game.loadout) return;
+    var face = game.player.dirX >= 0 ? 1 : -1;
+    var hr = TILE * 0.115 * sc, hx = cx, hy = cy - bh - TILE * 0.09 * sc;
+    var pas = game.loadout.passive;
+
+    // ---- umbrella: slung diagonally across the back (drawn first) ----
+    if (hasGear(game, 'umbrella')) {
+      var up = gearUp(game, 'umbrella');
+      var ubx = cx - face * bw * 0.45, uby = cy - bh * 0.15;
+      var utx = ubx - face * bw * 0.55, uty = uby - bh * 1.15;
+      ctx.strokeStyle = up ? '#c94b4b' : '#3a4757'; ctx.lineWidth = (up ? 3 : 2.3) * sc; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(ubx, uby); ctx.lineTo(utx, uty); ctx.stroke();
+      ctx.fillStyle = up ? '#e0c34a' : '#6a7686';
+      ctx.beginPath(); ctx.arc(utx, uty, (up ? 4 : 3) * sc, 0, 7); ctx.fill();
+    }
+
+    // ---- passive skill (only one equipped) ----
+    if (pas === 'linen') {                       // white sun hat + cream sash
+      ctx.fillStyle = '#f2ead6';
+      ctx.beginPath(); ctx.ellipse(hx, hy - hr * 0.5, hr * 1.95, hr * 0.6, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(hx, hy - hr * 0.55, hr * 0.95, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = '#e6dbbe'; ctx.fillRect(cx - bw * 0.5, cy - bh * 0.92, bw, bh * 0.15);
+    } else if (pas === 'speed') {                // teal running trainers + chevrons
+      ctx.fillStyle = COMMON.accent;
+      ctx.fillRect(cx - bw * 0.36, cy - 3 * sc, bw * 0.32, 5 * sc);
+      ctx.fillRect(cx + bw * 0.04, cy - 3 * sc, bw * 0.32, 5 * sc);
+    } else if (pas === 'surefoot') {             // sturdy brown boots
+      ctx.fillStyle = '#6b4a2b';
+      ctx.fillRect(cx - bw * 0.38, cy - 4 * sc, bw * 0.34, 7 * sc);
+      ctx.fillRect(cx + bw * 0.04, cy - 4 * sc, bw * 0.34, 7 * sc);
+    } else if (pas === 'heart') {                // red heart badge on the chest
+      ctx.fillStyle = '#e0524f'; heartShape(ctx, cx - face * bw * 0.16, cy - bh * 0.55, hr * 0.55);
+    } else if (pas === 'thrift') {               // berry coin-pouch at the hip
+      ctx.fillStyle = '#7a52ad';
+      roundRect(ctx, cx + face * bw * 0.26, cy - bh * 0.34, bw * 0.3, bh * 0.3, 3 * sc); ctx.fill();
+      ctx.fillStyle = '#ff6b81'; ctx.beginPath(); ctx.arc(cx + face * bw * 0.41, cy - bh * 0.19, hr * 0.32, 0, 7); ctx.fill();
+    }
+
+    // ---- accreditation: lanyard + hanging pass (gold when upgraded) ----
+    if (hasGear(game, 'accred')) {
+      var au = gearUp(game, 'accred'), cardY = cy - bh * 0.5;
+      ctx.strokeStyle = au ? '#ffd650' : '#5aa0d8'; ctx.lineWidth = 1.6 * sc;
+      ctx.beginPath();
+      ctx.moveTo(cx - hr * 0.6, hy + hr * 0.7); ctx.lineTo(cx, cardY);
+      ctx.moveTo(cx + hr * 0.6, hy + hr * 0.7); ctx.lineTo(cx, cardY); ctx.stroke();
+      ctx.fillStyle = au ? '#ffd650' : '#eef2ff';
+      roundRect(ctx, cx - bw * 0.17, cardY, bw * 0.34, bh * 0.27, 2 * sc); ctx.fill();
+      ctx.fillStyle = '#2c3550'; ctx.fillRect(cx - bw * 0.12, cardY + bh * 0.06, bw * 0.24, 1.8 * sc);
+    }
+
+    // ---- caltrops: a spiked belt pouch ----
+    if (hasGear(game, 'caltrops')) {
+      var cu = gearUp(game, 'caltrops');
+      var pbx = cx - face * bw * 0.46, pby = cy - bh * 0.3;
+      ctx.fillStyle = '#4a4038'; roundRect(ctx, pbx, pby, bw * 0.26, bh * 0.24, 2 * sc); ctx.fill();
+      ctx.strokeStyle = cu ? '#e0e6ec' : '#9aa3ac'; ctx.lineWidth = 1.3 * sc;
+      var scx = pbx + bw * 0.13, scy = pby + bh * 0.1;
+      for (var k = 0; k < 4; k++) {
+        var ka = k * Math.PI / 2 + 0.4;
+        ctx.beginPath(); ctx.moveTo(scx, scy); ctx.lineTo(scx + Math.cos(ka) * hr * 0.5, scy + Math.sin(ka) * hr * 0.5); ctx.stroke();
+      }
+    }
+
+    // ---- racket: held out to the facing side (carbon-black when upgraded) ----
+    if (hasGear(game, 'racket')) {
+      var ru = gearUp(game, 'racket');
+      var handX = cx + face * bw * 0.34, handY = cy - bh * 0.4;
+      var rgx = cx + face * bw * 0.92, rgy = cy - bh * 0.75;
+      ctx.strokeStyle = ru ? '#20242c' : '#cf9f3a'; ctx.lineWidth = 2.3 * sc; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(handX, handY); ctx.lineTo(rgx, rgy); ctx.stroke();
+      ctx.lineWidth = 1.8 * sc;
+      ctx.beginPath(); ctx.ellipse(rgx + face * hr * 0.3, rgy - hr * 0.7, hr * 0.85, hr * 1.15, face * 0.3, 0, 7); ctx.stroke();
+      ctx.strokeStyle = ru ? 'rgba(126,240,208,0.7)' : 'rgba(255,255,255,0.7)'; ctx.lineWidth = 0.8 * sc;
+      ctx.beginPath();
+      ctx.moveTo(rgx - hr * 0.4, rgy - hr * 0.9); ctx.lineTo(rgx + hr * 0.9, rgy - hr * 0.5);
+      ctx.moveTo(rgx - hr * 0.1, rgy - hr * 1.4); ctx.lineTo(rgx + hr * 0.5, rgy - hr * 0.1); ctx.stroke();
+    }
+
+    // ---- lollipop: raised on the trailing side (giant gobstopper when upgraded) ----
+    if (hasGear(game, 'lollipop')) {
+      var lu = gearUp(game, 'lollipop');
+      var lhandX = cx - face * bw * 0.32, lhandY = cy - bh * 0.4;
+      var lgx = cx - face * bw * 0.58, lgy = cy - bh * 1.0;
+      ctx.strokeStyle = '#f2ead6'; ctx.lineWidth = 1.8 * sc; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(lhandX, lhandY); ctx.lineTo(lgx, lgy); ctx.stroke();
+      var lr = (lu ? 1.15 : 0.78) * hr;
+      ctx.fillStyle = lu ? '#8a5fc9' : '#ff6b81';
+      ctx.beginPath(); ctx.arc(lgx, lgy, lr, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1.1 * sc;
+      ctx.beginPath(); ctx.arc(lgx, lgy, lr * 0.55, game.time * 3, game.time * 3 + 4.2); ctx.stroke();
+    }
+
+    // ---- sunglasses: over the eyes (glossy when upgraded) ----
+    if (hasGear(game, 'sunglasses')) {
+      var su = gearUp(game, 'sunglasses');
+      var gy = hy + hr * 0.02;
+      ctx.fillStyle = su ? '#07070d' : '#17171f';
+      ctx.fillRect(hx - hr * 0.9, gy, hr * 0.72, hr * 0.5);
+      ctx.fillRect(hx + hr * 0.18, gy, hr * 0.72, hr * 0.5);
+      ctx.fillRect(hx - hr * 0.18, gy + hr * 0.12, hr * 0.36, hr * 0.14);
+      if (su) { ctx.fillStyle = 'rgba(126,240,208,0.8)'; ctx.fillRect(hx - hr * 0.82, gy + hr * 0.06, hr * 0.22, hr * 0.12); }
+    }
+  }
+
   function drawPlayer(ctx, game, cam, alpha) {
     var p = game.player;
     var x = lerp(p.px, p.x, alpha), y = lerp(p.py, p.y, alpha);
@@ -933,6 +1054,9 @@
     ctx.beginPath(); ctx.arc(cx, cy - bh - TILE * 0.09 * sc, TILE * 0.13 * sc, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
     ctx.fillStyle = COMMON.accent; ctx.beginPath(); ctx.arc(cx - TILE * 0.13 * sc, cy - bh - TILE * 0.08 * sc, 3 * sc, 0, 7); ctx.fill();
     ctx.fillStyle = '#c5342b'; ctx.fillRect(cx + TILE * 0.08 * sc, cy - bh * 0.25, 5 * sc, 8 * sc);
+
+    drawPlayerGear(ctx, game, cx, cy, bw, bh, sc);
+
     if (p.stun > 0) {
       ctx.fillStyle = COMMON.water;
       for (var d = 0; d < 3; d++) {
