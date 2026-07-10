@@ -250,10 +250,12 @@
         npcs: [
           { type: 'posh', count: 3, rowMin: 15, rowMax: 20, group: 'gate1' },
           { type: 'posh', count: 3, rowMin: 15, rowMax: 20, group: 'gate2' },
+          { type: 'posh', count: 2, rowMin: 15, rowMax: 20 },
           { type: 'posh', count: 3, rowMin: 8, rowMax: 13, group: 'mid1' },
+          { type: 'posh', count: 3, rowMin: 8, rowMax: 13, group: 'mid2' },
           { type: 'posh', count: 2, rowMin: 8, rowMax: 13 },
           { type: 'posh', count: 3, rowMin: 1, rowMax: 6, group: 'lawn1' },
-          { type: 'posh', count: 2, rowMin: 1, rowMax: 6 }
+          { type: 'posh', count: 3, rowMin: 1, rowMax: 6, group: 'lawn2' }
         ],
         berryCount: 16, goldenBerry: { col: 1, row: 1 }
       }),
@@ -277,7 +279,7 @@
           { type: 'posh', count: 3, rowMin: 9, rowMax: 14, group: 'm1' },
           { type: 'wheelchair', count: 1, rowMin: 9, rowMax: 14 },
           { type: 'posh', count: 3, rowMin: 1, rowMax: 6, group: 'l1' },
-          { type: 'posh', count: 2, rowMin: 1, rowMax: 6 }
+          { type: 'posh', count: 3, rowMin: 1, rowMax: 6, group: 'l2' }
         ],
         berryCount: 18, goldenBerry: { col: 19, row: 1 }
       }),
@@ -297,9 +299,10 @@
           { type: 'kid', count: 3, rowMin: 13, rowMax: 18, group: 'kids2' },
           { type: 'posh', count: 2, rowMin: 13, rowMax: 18 },
           { type: 'kid', count: 3, rowMin: 7, rowMax: 11, group: 'kids3' },
+          { type: 'posh', count: 2, rowMin: 7, rowMax: 11, group: 'p3' },
           { type: 'wheelchair', count: 1, rowMin: 7, rowMax: 11 },
           { type: 'kid', count: 2, rowMin: 1, rowMax: 5, group: 'kids4' },
-          { type: 'posh', count: 2, rowMin: 1, rowMax: 5 }
+          { type: 'posh', count: 3, rowMin: 1, rowMax: 5, group: 'p4' }
         ],
         berryCount: 20, goldenBerry: { col: 1, row: 1 }
       }),
@@ -346,13 +349,12 @@
         npcs: [
           { type: 'posh', count: 3, rowMin: 24, rowMax: 28, group: 'q1' },
           { type: 'kid', count: 2, rowMin: 24, rowMax: 28, group: 'k1' },
-          { type: 'security', waypoints: [[2, 20], [18, 20], [18, 17], [2, 17]] },
+          { type: 'security', waypoints: [[3, 19], [10, 19]] },
           { type: 'posh', count: 3, rowMin: 16, rowMax: 21, group: 'm1' },
-          { type: 'fan', col: 4, row: 18, rowMin: 16, rowMax: 21 },
-          { type: 'wheelchair', count: 2, rowMin: 16, rowMax: 21 },
-          { type: 'security', waypoints: [[3, 9], [17, 9]] },
-          { type: 'kid', count: 3, rowMin: 8, rowMax: 13, group: 'k2' },
-          { type: 'fan', col: 15, row: 4, rowMin: 1, rowMax: 6 },
+          { type: 'fan', col: 16, row: 20, rowMin: 16, rowMax: 21 },
+          { type: 'wheelchair', count: 1, rowMin: 16, rowMax: 21 },
+          { type: 'kid', count: 2, rowMin: 8, rowMax: 13, group: 'k2' },
+          { type: 'posh', count: 2, rowMin: 8, rowMax: 13 },
           { type: 'posh', count: 3, rowMin: 1, rowMax: 6, group: 'box1' }
         ],
         berryCount: 24, goldenBerry: { col: 1, row: 1 }
