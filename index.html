@@ -12,83 +12,133 @@
 -->
 <style>
   :root {
-    --wim-green: #12351f;
-    --wim-purple: #4a2377;
-    --cream: #f5f0e4;
+    --ink: #0c1220;
+    --cream: #eef0f6;
+    --accent: #7ef0d0;
+    --straw: #ff6b81;
+    --glass: rgba(10, 14, 28, 0.6);
+    --glass-edge: rgba(255, 255, 255, 0.09);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { height: 100%; }
+  html, body { height: 100%; overflow: hidden; background: var(--ink); }
   body {
-    background: radial-gradient(ellipse at 50% -20%, #1d4a2c, var(--wim-green));
     color: var(--cream);
-    font-family: Georgia, 'Times New Roman', serif;
-    display: flex; flex-direction: column; align-items: center;
-    min-height: 100%; padding: 10px;
-    touch-action: manipulation; /* kill double-tap zoom on mobile */
+    font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   }
-  h1 {
-    font-size: clamp(1.2rem, 3.5vw, 1.9rem);
-    letter-spacing: 0.06em; font-weight: normal;
-    margin: 4px 0 2px;
+  canvas {
+    position: fixed; inset: 0;
+    width: 100vw; height: 100vh;
+    display: block;
   }
-  h1 .straw { color: #e8536a; }
+  .chip {
+    background: var(--glass);
+    border: 1px solid var(--glass-edge);
+    border-radius: 999px;
+    padding: 6px 14px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    font-size: clamp(0.78rem, 1.6vw, 0.95rem);
+    line-height: 1.2;
+    white-space: nowrap;
+  }
   #hud {
-    display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap;
-    justify-content: center;
-    font-size: clamp(0.8rem, 2.2vw, 1rem);
-    margin-bottom: 6px; min-height: 1.4em;
+    position: fixed; top: 14px; left: 14px; right: 14px;
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    pointer-events: none;
   }
-  #hud-berries { font-size: 1.15em; }
-  #hud-dash { color: #b9a8d6; }
+  #hud .spacer { flex: 1; }
+  #hud-hearts { letter-spacing: 0.12em; }
+  #hud-berries { font-weight: 600; }
+  #hud-zone { color: #b9c6d6; font-style: italic; }
+  #hud-time { font-variant-numeric: tabular-nums; color: #cfd6e4; }
+  #hud-dash { color: #9aa6c9; }
   #hud-dash.armed {
-    color: #ffd740; font-weight: bold;
+    color: var(--accent); font-weight: 700;
+    border-color: rgba(126, 240, 208, 0.4);
     animation: glow 0.9s ease-in-out infinite alternate;
   }
   #hud-sloth { color: #ff8a80; font-style: italic; }
-  @keyframes glow { from { opacity: 0.75; } to { opacity: 1; } }
-  .pulse { animation: pop 0.35s ease-out; }
-  @keyframes pop { 30% { transform: scale(1.35); } 100% { transform: scale(1); } }
-  #stagewrap { position: relative; line-height: 0; }
-  canvas {
-    max-width: min(96vw, 560px);
-    max-height: 76vh;
-    width: auto; height: auto;
-    border: 3px solid var(--wim-purple);
-    border-radius: 8px;
-    box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  #title {
+    font-size: clamp(0.78rem, 1.6vw, 0.95rem);
+    letter-spacing: 0.14em; font-weight: 700;
   }
+  #title .straw { color: var(--straw); }
+  @keyframes glow { from { opacity: 0.7; } to { opacity: 1; } }
+  .pulse { animation: pop 0.35s ease-out; }
+  @keyframes pop { 30% { transform: scale(1.25); } 100% { transform: scale(1); } }
+  #progress {
+    position: fixed; top: 0; left: 0; right: 0; height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    z-index: 2;
+  }
+  #progress-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--straw));
+    transition: width 0.25s ease-out;
+    box-shadow: 0 0 12px rgba(126, 240, 208, 0.5);
+  }
+  #toast {
+    position: fixed; top: 64px; left: 50%;
+    transform: translate(-50%, -8px);
+    background: var(--glass);
+    border: 1px solid var(--glass-edge);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: var(--cream);
+    padding: 8px 18px; border-radius: 999px;
+    font-size: clamp(0.8rem, 1.8vw, 0.95rem);
+    white-space: nowrap;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 3;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
   #overlay {
-    position: absolute; inset: 0;
+    position: fixed; inset: 0;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    background: rgba(18, 30, 20, 0.78);
-    border-radius: 8px; line-height: 1.5;
-    padding: 24px; text-align: center;
+    background: rgba(6, 9, 20, 0.72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    line-height: 1.55; padding: 24px; text-align: center;
+    z-index: 4;
   }
   #overlay.hidden, #hud-sloth.hidden { display: none; }
-  #overlay-title { font-size: clamp(1.4rem, 5vw, 2.4rem); margin-bottom: 12px; }
-  #overlay-sub { font-size: clamp(0.85rem, 2.6vw, 1.05rem); max-width: 42ch; }
-  footer {
-    margin-top: 8px; font-size: 0.75rem; opacity: 0.55; text-align: center;
+  #overlay-title {
+    font-size: clamp(1.7rem, 6vw, 3.2rem);
+    font-weight: 800; letter-spacing: 0.04em;
+    margin-bottom: 14px;
+    text-shadow: 0 0 30px rgba(255, 107, 129, 0.35);
+  }
+  #overlay-sub {
+    font-size: clamp(0.88rem, 2.2vw, 1.05rem);
+    max-width: 52ch; color: #ccd4e2;
+  }
+  #hint {
+    position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+    font-size: 0.72rem; color: rgba(230, 235, 245, 0.4);
+    white-space: nowrap; pointer-events: none;
   }
 </style>
 </head>
 <body>
-  <h1>STRAWBERRY <span class="straw">RUSH</span></h1>
+  <div id="progress"><div id="progress-fill"></div></div>
+  <canvas id="game" width="690" height="620"></canvas>
   <div id="hud">
-    <span id="hud-berries">🍓 0</span>
-    <span id="hud-dash">dash at 3 🍓</span>
-    <span id="hud-stage"></span>
-    <span id="hud-sloth" class="hidden">losing strawberries — move!</span>
+    <span id="title" class="chip">STRAWBERRY <span class="straw">RUSH</span></span>
+    <span id="hud-hearts" class="chip">❤️❤️❤️</span>
+    <span id="hud-berries" class="chip">🍓 0</span>
+    <span id="hud-dash" class="chip">dash at 3 🍓 (Shift)</span>
+    <span id="hud-sloth" class="chip hidden">losing strawberries — move!</span>
+    <span class="spacer"></span>
+    <span id="hud-zone" class="chip">The Queue</span>
+    <span id="hud-time" class="chip">0:00.0</span>
   </div>
-  <div id="stagewrap">
-    <canvas id="game" width="624" height="576"></canvas>
-    <div id="overlay" class="hidden">
-      <div id="overlay-title"></div>
-      <div id="overlay-sub"></div>
-    </div>
+  <div id="toast"></div>
+  <div id="overlay" class="hidden">
+    <div id="overlay-title"></div>
+    <div id="overlay-sub"></div>
   </div>
-  <footer>arrows / WASD to hop · double-tap a direction to dash ·
-    swipe on touch · avoid the crowd, the flashes, and standing still</footer>
+  <div id="hint">arrows / WASD — hold to run · Shift+direction to dash · swipe on touch</div>
   <script src="src/logic.js"></script>
   <script src="src/render.js"></script>
   <script src="src/input.js"></script>

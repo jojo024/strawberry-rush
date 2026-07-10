@@ -1,49 +1,69 @@
 /*
- * Strawberry Rush — shell: game loop, stage flow, HUD.
+ * Strawberry Rush — shell: game loop, level campaign, HUD.
  *
- * Fixed-timestep simulation (60 Hz) with render interpolation: the loop
- * accumulates real elapsed time, steps the pure logic in constant DT slices
- * (deterministic collisions and timers regardless of display refresh), and
- * renders once per animation frame with alpha = leftover/DT so movement
- * stays smooth on 120 Hz+ screens.
+ * Fixed-timestep simulation (60 Hz) with render interpolation. Free
+ * movement: every tick the shell reads the live input vector and feeds it
+ * to the logic (GL.setMove); Shift/two-finger tap requests a dash.
+ *
+ * Campaign: three levels back to back. Strawberries carry over between
+ * levels; hearts refill at each level start; dying retries the current
+ * level with the berries you brought into it. The best TOTAL time across
+ * all three levels persists in localStorage.
  */
 (function () {
   'use strict';
 
   var GL = window.GameLogic, GR = window.GameRender;
   var DT = 1 / 60;
-  var MAX_FRAME = 0.25; // clamp for tab-switch pauses: avoid a spiral of death
+  var MAX_FRAME = 0.25;
+  var BEST_KEY = 'strawberryRushBestV4';
 
   var canvas = document.getElementById('game');
   var hud = {
+    hearts: document.getElementById('hud-hearts'),
     berries: document.getElementById('hud-berries'),
     dash: document.getElementById('hud-dash'),
-    stage: document.getElementById('hud-stage'),
+    zone: document.getElementById('hud-zone'),
+    time: document.getElementById('hud-time'),
     sloth: document.getElementById('hud-sloth'),
+    progress: document.getElementById('progress-fill'),
+    toast: document.getElementById('toast'),
     overlay: document.getElementById('overlay'),
     overlayTitle: document.getElementById('overlay-title'),
     overlaySub: document.getElementById('overlay-sub')
   };
 
   var shell = {
-    mode: 'menu',        // 'menu' | 'playing' | 'stageClear' | 'dead' | 'won'
-    stageIndex: 0,
+    mode: 'menu',            // 'menu' | 'playing' | 'levelClear' | 'dead' | 'won'
+    levelIndex: 0,
     game: null,
-    bank: 0,             // strawberries carried into the current stage
-    totalCollected: 0,
+    bank: 0,                 // strawberries carried into the current level
+    levelStartBank: 0,       // for retries
+    totalTime: 0,            // across completed levels
     acc: 0,
-    last: 0
+    last: 0,
+    lastZone: '',
+    toastTimer: null
   };
+  var input;
 
-  // ------------------------------------------------------------- stage flow
-  function startStage(index) {
-    shell.stageIndex = index;
-    shell.game = GL.createGame(GL.STAGES[index], (Date.now() ^ (index * 7919)) >>> 0);
+  // ------------------------------------------------------------- campaign
+  function startLevel(index) {
+    shell.levelIndex = index;
+    shell.levelStartBank = shell.bank;
+    shell.game = GL.createGame(GL.LEVELS[index], (Date.now() ^ (index * 7919)) >>> 0);
     shell.game.strawberries = shell.bank;
     GR.setupCanvas(canvas, shell.game);
     shell.mode = 'playing';
+    shell.lastZone = zoneLabel();
     hideOverlay();
     updateHud();
+  }
+
+  function startCampaign() {
+    shell.bank = 0;
+    shell.totalTime = 0;
+    startLevel(0);
   }
 
   function showOverlay(title, sub) {
@@ -56,70 +76,132 @@
   var DEATH_LINES = {
     posh: 'Flattened by a gentleman in linen. He didn’t even notice.',
     wheelchair: 'Clipped by a very determined wheelchair user.',
-    kid: 'Taken out by a sprinting child. Naturally.'
+    kid: 'Taken out by a sprinting child. Naturally.',
+    steward: 'Escorted firmly off the premises by a steward.',
+    fan: 'Mobbed for an autograph you couldn’t give.',
+    seated: 'Trod on a picnic. Unforgivable.'
   };
+
+  function fmtTime(t) {
+    var m = Math.floor(t / 60);
+    var s = t - m * 60;
+    return m + ':' + (s < 10 ? '0' : '') + s.toFixed(1);
+  }
+
+  function readBest() {
+    try { return parseFloat(localStorage.getItem(BEST_KEY)) || null; }
+    catch (e) { return null; }
+  }
+  function writeBest(t) {
+    try { localStorage.setItem(BEST_KEY, String(t)); } catch (e) { /* private mode */ }
+  }
 
   function onGameOver(cause) {
     shell.mode = 'dead';
-    showOverlay('Ouch!', (DEATH_LINES[cause] || 'The crowd claims another victim.') +
-      '  —  Space to retry this stage.');
+    showOverlay('Out of hearts!',
+      (DEATH_LINES[cause] || 'The crowd claims another victim.') +
+      '  —  Space to retry ' + GL.LEVELS[shell.levelIndex].name + '.');
   }
 
-  function onStageClear() {
-    shell.bank = shell.game.strawberries; // carry the stack to the next lawn
-    if (shell.stageIndex >= GL.STAGES.length - 1) {
+  function onLevelWon(e) {
+    shell.bank = shell.game.strawberries;
+    shell.totalTime += e.time;
+    if (shell.levelIndex >= GL.LEVELS.length - 1) {
       shell.mode = 'won';
-      showOverlay('LUNCH ACQUIRED 🍓',
-        'All 5 stages crossed. Strawberries gathered: ' + shell.totalCollected +
-        '.  —  Space to play again.');
+      var best = readBest();
+      var line = 'All ' + GL.LEVELS.length + ' levels crossed in ' +
+                 fmtTime(shell.totalTime) + '.';
+      if (best === null || shell.totalTime < best) {
+        writeBest(shell.totalTime);
+        line += best === null ? '' : '  New best! (was ' + fmtTime(best) + ')';
+      } else {
+        line += '  Best: ' + fmtTime(best) + '.';
+      }
+      showOverlay('LUNCH ACQUIRED 🍓', line + '  —  Space to run it again.');
     } else {
-      shell.mode = 'stageClear';
-      showOverlay('Stage ' + (shell.stageIndex + 1) + ' clear!',
-        'Next: “' + GL.STAGES[shell.stageIndex + 1].name + '”  —  Space to continue.');
+      shell.mode = 'levelClear';
+      showOverlay('Level ' + (shell.levelIndex + 1) + ' clear! (' + fmtTime(e.time) + ')',
+        'Next: “' + GL.LEVELS[shell.levelIndex + 1].name + '” — your ' +
+        shell.bank + ' 🍓 come with you, hearts refill.  —  Space to continue.');
     }
   }
 
   function onAction() {
-    if (shell.mode === 'menu') { shell.bank = 0; shell.totalCollected = 0; startStage(0); }
-    else if (shell.mode === 'stageClear') startStage(shell.stageIndex + 1);
-    else if (shell.mode === 'dead') startStage(shell.stageIndex); // bank unchanged: retry with what you brought in
-    else if (shell.mode === 'won') { shell.bank = 0; shell.totalCollected = 0; startStage(0); }
+    if (shell.mode === 'menu' || shell.mode === 'won') startCampaign();
+    else if (shell.mode === 'levelClear') startLevel(shell.levelIndex + 1);
+    else if (shell.mode === 'dead') {
+      shell.bank = shell.levelStartBank;
+      startLevel(shell.levelIndex);
+    }
   }
 
-  function onMove(dir, dash) {
-    if (shell.mode !== 'playing') return;
-    GL.applyInput(shell.game, dir, dash);
+  function onDash() {
+    if (shell.mode === 'playing') GL.tryDash(shell.game);
   }
 
   // ------------------------------------------------------------- HUD
   function pulse(el) {
     el.classList.remove('pulse');
-    void el.offsetWidth; // restart the CSS animation
+    void el.offsetWidth;
     el.classList.add('pulse');
+  }
+
+  function toast(msg) {
+    hud.toast.textContent = msg;
+    hud.toast.classList.add('show');
+    clearTimeout(shell.toastTimer);
+    shell.toastTimer = setTimeout(function () {
+      hud.toast.classList.remove('show');
+    }, 1700);
+  }
+
+  function zoneLabel() {
+    var g = shell.game;
+    if (!g) return '';
+    var zone = GL.zoneForRow(g.level, g.player.row);
+    var name = g.player.row === 0 ? 'The Food Truck' : (zone ? zone.name : shell.lastZone);
+    return 'L' + (shell.levelIndex + 1) + '/' + GL.LEVELS.length + ' · ' + name;
   }
 
   function updateHud() {
     var g = shell.game;
     if (!g) return;
+    var hearts = '';
+    for (var i = 0; i < GL.C.HEARTS; i++) hearts += i < g.hearts ? '❤️' : '🖤';
+    hud.hearts.textContent = hearts;
     hud.berries.textContent = '🍓 ' + g.strawberries;
-    hud.stage.textContent = 'Stage ' + (shell.stageIndex + 1) + '/5 · ' + g.stage.name;
+    hud.time.textContent = fmtTime(shell.totalTime + g.time);
     var armed = g.strawberries >= GL.C.DASH_COST;
-    hud.dash.textContent = armed ? 'DASH READY — double-tap!' : 'dash at 3 🍓';
+    hud.dash.textContent = armed ? 'DASH READY — press Shift!' : 'dash at 3 🍓 (Shift)';
     hud.dash.classList.toggle('armed', armed);
-    var slothy = shell.mode === 'playing' && !g.player.hop &&
+
+    var label = zoneLabel();
+    if (label) shell.lastZone = label;
+    hud.zone.textContent = shell.lastZone;
+
+    hud.progress.style.width =
+      Math.round(100 * (1 - g.player.row / g.level.startRow)) + '%';
+
+    var slothy = shell.mode === 'playing' && !g.player.moving &&
                  g.slothTimer >= GL.C.SLOTH_GRACE && g.strawberries > 0;
     hud.sloth.classList.toggle('hidden', !slothy);
   }
 
   function drainEvents() {
     var evts = shell.game.events;
+    if (!evts.length) return;
+    GR.onEvents(shell.game, evts);
     for (var i = 0; i < evts.length; i++) {
       var e = evts[i];
-      if (e.type === 'berry') { shell.totalCollected++; pulse(hud.berries); }
-      else if (e.type === 'photobomb' && e.lost > 0) pulse(hud.berries);
+      if (e.type === 'berry' || e.type === 'goldBerry') pulse(hud.berries);
+      else if (e.type === 'photobomb' && e.lost > 0) { pulse(hud.berries); toast('Photobombed! −' + e.lost + ' 🍓'); }
       else if (e.type === 'slothLoss') pulse(hud.berries);
+      else if (e.type === 'sprinklerHit') { pulse(hud.berries); toast('Soaked! −' + e.lost + ' 🍓'); }
+      else if (e.type === 'hit') { pulse(hud.hearts); if (e.hearts > 0) toast('Ouch! Back to the checkpoint.'); }
+      else if (e.type === 'checkpoint') toast('Checkpoint — ' + e.zone);
+      else if (e.type === 'fanSpotted') toast('A fan has spotted you — run!');
       else if (e.type === 'dead') onGameOver(e.cause);
-      else if (e.type === 'stageClear') onStageClear();
+      else if (e.type === 'won') onLevelWon(e);
     }
     evts.length = 0;
   }
@@ -133,6 +215,8 @@
     if (shell.mode === 'playing') {
       shell.acc += elapsed;
       while (shell.acc >= DT) {
+        var v = input.getMoveVector();
+        GL.setMove(shell.game, v.x, v.y);
         GL.step(shell.game, DT);
         shell.acc -= DT;
         drainEvents();
@@ -145,15 +229,21 @@
   }
 
   // ------------------------------------------------------------- boot
-  GameInput.createInput(onMove, onAction);
-  // Pre-render stage 1 behind the menu so the title screen has a backdrop.
-  shell.game = GL.createGame(GL.STAGES[0], 20260709);
+  input = GameInput.createInput(onDash, onAction);
+  window.addEventListener('resize', function () {
+    if (shell.game) GR.resize(canvas, shell.game);
+  });
+  shell.game = GL.createGame(GL.LEVELS[0], 20260710);
   GR.setupCanvas(canvas, shell.game);
   shell.mode = 'menu';
+  var best = readBest();
   showOverlay('Strawberry Rush 🍓',
-    'Cross the crowd, reach the food truck. Arrows/WASD to hop, ' +
-    'double-tap to dash (costs your whole stack of 3+). ' +
-    'Don’t dawdle, don’t photobomb. — Space to start.');
+    'An evening run across ' + GL.LEVELS.length + ' lantern-lit grounds to ' +
+    'the food truck. Move freely with arrows/WASD (combine for diagonals). ' +
+    'Shift dashes when you carry 3+ 🍓 — it spends the whole stack. ' +
+    '3 hearts per level, checkpoints at every zone, berries carry over. ' +
+    (best !== null ? 'Best campaign: ' + fmtTime(best) + '. ' : '') +
+    '— Space to start.');
   updateHud();
   requestAnimationFrame(frame);
 })();
