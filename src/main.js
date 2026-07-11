@@ -274,7 +274,11 @@
     var row = document.createElement('div'); row.className = 'row';
     if (!owned) {
       row.appendChild(costTag(def.cost));
-      row.appendChild(miniBtn('Buy', 'buy', !canAfford(def.cost), function () { shell.bank -= def.cost; profile.passivesOwned[key] = true; saveProfile(); buildShop(); }));
+      row.appendChild(miniBtn('Buy', 'buy', !canAfford(def.cost), function () {
+        shell.bank -= def.cost; profile.passivesOwned[key] = true;
+        if (profile.loadout.passive === 'none') profile.loadout.passive = key; // auto-equip if the slot is free
+        saveProfile(); buildShop();
+      }));
     } else {
       row.appendChild(miniBtn(equipped ? 'Equipped' : 'Equip', equipped ? 'on' : 'equip', false, function () { profile.loadout.passive = key; saveProfile(); buildShop(); }));
     }
@@ -295,7 +299,11 @@
     var row = document.createElement('div'); row.className = 'row';
     if (!owned) {
       row.appendChild(costTag(def.cost));
-      row.appendChild(miniBtn('Buy', 'buy', !canAfford(def.cost), function () { shell.bank -= def.cost; profile.owned[key] = true; saveProfile(); buildShop(); }));
+      row.appendChild(miniBtn('Buy', 'buy', !canAfford(def.cost), function () {
+        shell.bank -= def.cost; profile.owned[key] = true;
+        if (profile.loadout.items.indexOf(key) === -1 && profile.loadout.items.length < 2) profile.loadout.items.push(key); // auto-equip into a free slot
+        saveProfile(); buildShop();
+      }));
     } else {
       row.appendChild(miniBtn(equipped ? 'Equipped' : 'Equip', equipped ? 'on' : 'equip', slotsFull, function () {
         var items = profile.loadout.items, i = items.indexOf(key);
