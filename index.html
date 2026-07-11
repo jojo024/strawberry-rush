@@ -121,6 +121,24 @@
   .lb-rank { color: var(--gold); font-weight: 700; }
   .lb-empty { text-align: center; color: #8b95a8; padding: 20px; }
 
+  /* ---- settings ---- */
+  .set-inner { width: min(560px, 100%); margin: auto; text-align: left; }
+  #settings h2 { text-align: center; font-size: clamp(1.4rem, 4vw, 2rem); font-weight: 800; margin-bottom: 8px; }
+  .set-lead { text-align: center; color: #b9c2d2; margin-bottom: 12px; font-size: 0.9rem; }
+  .set-row { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    padding: 14px 4px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .set-label { font-weight: 600; }
+  .set-desc { font-size: 0.8rem; color: #9fb0c8; margin-top: 3px; max-width: 34ch; }
+  .toggle { width: 52px; height: 28px; border-radius: 999px; border: 1px solid var(--glass-edge);
+    background: rgba(255,255,255,0.08); position: relative; cursor: pointer; flex: 0 0 auto; transition: background 0.15s; }
+  .toggle.on { background: var(--accent); }
+  .toggle .knob { position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%;
+    background: #fff; transition: left 0.15s; }
+  .toggle.on .knob { left: 26px; }
+  .keybtn { font: inherit; font-weight: 600; color: var(--cream); background: rgba(255,255,255,0.06);
+    border: 1px solid var(--glass-edge); border-radius: 10px; padding: 9px 16px; cursor: pointer; min-width: 130px; text-align: center; }
+  .keybtn.listening { color: var(--accent); border-color: rgba(126,240,208,0.55); }
+
   #hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
     font-size: 0.72rem; color: rgba(230,235,245,0.42); white-space: nowrap; pointer-events: none; z-index: 2; }
 </style>
@@ -180,6 +198,18 @@
       <div class="lb-sub" id="lb-sub">Ranked runs — most strawberries banked, fastest time.</div>
       <div id="leaderboard-body"></div>
       <div id="leaderboard-buttons" class="btn-row"></div>
+    </div>
+  </div>
+
+  <div id="settings" class="screen hidden">
+    <div class="set-inner">
+      <h2>Settings</h2>
+      <div class="set-lead">Tune how dashing works.</div>
+      <div id="settings-body"></div>
+      <div class="btn-row">
+        <button class="btn" id="settings-close">Done</button>
+        <button class="btn ghost" id="settings-reset">Reset to defaults</button>
+      </div>
     </div>
   </div>
 

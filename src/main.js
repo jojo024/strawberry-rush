@@ -31,16 +31,22 @@
     overlayExtra: el('overlay-extra'), overlayButtons: el('overlay-buttons'),
     shop: el('shop'), shopTitle: el('shop-title'), shopBank: el('shop-bank'), shopBody: el('shop-body'),
     handbook: el('handbook'), handbookBody: el('handbook-body'),
-    leaderboard: el('leaderboard'), lbSub: el('lb-sub'), lbBody: el('leaderboard-body'), lbButtons: el('leaderboard-buttons')
+    leaderboard: el('leaderboard'), lbSub: el('lb-sub'), lbBody: el('leaderboard-body'), lbButtons: el('leaderboard-buttons'),
+    settings: el('settings'), settingsBody: el('settings-body')
   };
+
+  var DEFAULT_SETTINGS = { doubleTapDash: true, dashKey: 'Shift' };
 
   // ---- persistent profile -------------------------------------------------
   function defaultProfile() {
     return { owned: {}, upgraded: {}, passivesOwned: { none: true },
              loadout: { passive: 'none', items: [] }, bestTime: null,
-             leaderboard: [], lastName: 'Player' };
+             leaderboard: [], lastName: 'Player',
+             settings: { doubleTapDash: true, dashKey: 'Shift' } };
   }
   var profile = loadProfile();
+  // Normalise settings once and keep the SAME object — input reads it live.
+  profile.settings = Object.assign({}, DEFAULT_SETTINGS, profile.settings || {});
   function loadProfile() {
     try {
       var p = JSON.parse(localStorage.getItem(SAVE_KEY));
@@ -69,7 +75,7 @@
 
   function show(s) { s.classList.remove('hidden'); }
   function hide(s) { s.classList.add('hidden'); }
-  function hideAllScreens() { hide(hud.overlay); hide(hud.shop); hide(hud.handbook); hide(hud.leaderboard); }
+  function hideAllScreens() { hide(hud.overlay); hide(hud.shop); hide(hud.handbook); hide(hud.leaderboard); hide(hud.settings); }
 
   function overlay(title, sub, buttons, extraNode) {
     hud.overlayTitle.textContent = title;
@@ -105,22 +111,46 @@
     saveProfile();
   }
 
+  // ---- run persistence (per browser, via localStorage) --------------------
+  // The whole run — where you are, your bank, your time — is saved so you can
+  // quit to the menu and Resume later without losing progress. Gear (owned /
+  // upgraded / loadout) already lives in the profile.
+  function saveRun() {
+    profile.run = { active: true, runMode: shell.runMode, levelIndex: shell.levelIndex,
+      endlessNum: shell.endlessNum, runSeed: shell.runSeed, bank: shell.bank, totalTime: shell.totalTime,
+      goldens: shell.goldens || {} };
+    saveProfile();
+  }
+  function clearRun() { profile.run = { active: false }; saveProfile(); }
+  function resumeRun() {
+    var r = profile.run; if (!r || !r.active) { showMenu(); return; }
+    shell.runMode = r.runMode; shell.levelIndex = r.levelIndex || 0; shell.endlessNum = r.endlessNum || 0;
+    shell.runSeed = r.runSeed || 0; shell.bank = r.bank || 0; shell.totalTime = r.totalTime || 0;
+    shell.goldens = r.goldens || {};
+    openShop();
+  }
+
   // ---- campaign flow ------------------------------------------------------
   function startRanked() {
     resetRun();
     shell.runMode = 'ranked'; shell.levelIndex = 0; shell.bank = 0; shell.totalTime = 0;
+    shell.goldens = {};        // ranked levels whose golden berry you've claimed
+    saveRun();
     openShop();
   }
   function startEndless() {
     resetRun();
     shell.runMode = 'endless'; shell.endlessNum = 1; shell.bank = 0; shell.totalTime = 0;
     shell.runSeed = (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0;
+    shell.goldens = {};
+    saveRun();
     openShop();
   }
 
   function openShop() {
     shell.levelDef = makeLevelDef();
     shell.mode = 'shop';
+    saveRun();               // shop = safe checkpoint for the saved run
     buildShop();
     hideAllScreens(); show(hud.shop);
   }
@@ -128,6 +158,7 @@
   function startLevel() {
     shell.levelStartBank = shell.bank;
     shell.pendingClear = null;
+    shell.goldenThisLevel = false;   // did you grab this level's golden on this attempt?
     var seed = (Date.now() ^ (shell.levelIndex * 7919) ^ (shell.endlessNum * 104729)) >>> 0;
     shell.game = GL.createGame(shell.levelDef, seed, currentLoadout());
     shell.game.strawberries = shell.bank;
@@ -151,14 +182,17 @@
   function onGameOver(cause) {
     overlay('Out of hearts!',
       (DEATH_LINES[cause] || 'The crowd claims another victim.') +
-      '  You retry ' + shell.levelDef.name + ' with what you brought in.',
+      '  Retry ' + shell.levelDef.name + ' with the bank you brought in — or hit the shop first to buy upgrades.',
       [{ label: 'Retry level', onClick: function () { shell.bank = shell.levelStartBank; startLevel(); } },
+       { label: 'Shop & retry', onClick: function () { shell.bank = shell.levelStartBank; openShop(); } },
        { label: 'Handbook', ghost: true, onClick: function () { openHandbook('overlay'); } },
        { label: 'Quit to menu', ghost: true, onClick: toMenu }]);
   }
 
   function onLevelWon(e) {
     shell.pendingClear = { time: e.time, bank: shell.game.strawberries };
+    // Credit this level's golden only if you actually cleared the level with it.
+    if (shell.runMode === 'ranked' && shell.goldenThisLevel) shell.goldens[shell.levelIndex] = true;
     var isFinalRanked = shell.runMode === 'ranked' && shell.levelIndex >= RANKED_COUNT - 1;
     if (isFinalRanked) { commitClear(); onCampaignComplete(); return; }
 
@@ -183,16 +217,24 @@
     else shell.levelIndex++;
   }
 
+  var PERFECT_BONUS = 250;   // for collecting every golden across all 10 levels
+
   function onCampaignComplete() {
-    var score = Math.round(shell.bank * 10 - shell.totalTime);
+    clearRun(); // the run is finished — no half-run to resume
+    var golds = Object.keys(shell.goldens || {}).length;
+    var perfect = golds >= RANKED_COUNT;
+    var score = Math.round(shell.bank * 10 - shell.totalTime) + (perfect ? PERFECT_BONUS : 0);
     if (profile.bestTime === null || shell.totalTime < profile.bestTime) { profile.bestTime = shell.totalTime; saveProfile(); }
     var inp = document.createElement('input');
     inp.className = 'name-input'; inp.maxLength = 16; inp.value = profile.lastName || 'Player';
     inp.setAttribute('aria-label', 'Your name for the leaderboard');
-    overlay('🏆 Champion!',
+    var goldLine = perfect
+      ? '⭐ PERFECT RUN — every golden strawberry collected! +' + PERFECT_BONUS + ' bonus.'
+      : 'Golden strawberries: ' + golds + '/' + RANKED_COUNT + ' (collect all 10 for a perfect score).';
+    overlay(perfect ? '⭐ Perfect Champion!' : '🏆 Champion!',
       'All ' + RANKED_COUNT + ' grounds crossed in ' + fmtTime(shell.totalTime) + ' with ' +
-      shell.bank + ' 🍓 banked.  Score: ' + score + '.  Log it on the leaderboard:',
-      [{ label: 'Save score', onClick: function () { recordScore(inp.value, score); showLeaderboard('You’re on the board!'); } },
+      shell.bank + ' 🍓 banked.  ' + goldLine + '  Score: ' + score + '.  Log it on the leaderboard:',
+      [{ label: 'Save score', onClick: function () { recordScore(inp.value, score, perfect, golds); showLeaderboard('You’re on the board!'); } },
        { label: 'Skip', ghost: true, onClick: function () { showLeaderboard(); } }],
       inp);
   }
@@ -200,10 +242,11 @@
   function toMenu() { showMenu(); }
 
   // ---- leaderboard --------------------------------------------------------
-  function recordScore(name, score) {
+  function recordScore(name, score, perfect, golds) {
     name = (name || 'Player').toString().slice(0, 16).trim() || 'Player';
     profile.lastName = name;
-    profile.leaderboard.push({ name: name, berries: shell.bank, time: shell.totalTime, score: score, date: Date.now() });
+    profile.leaderboard.push({ name: name, berries: shell.bank, time: shell.totalTime,
+      score: score, perfect: !!perfect, golds: golds || 0, date: Date.now() });
     profile.leaderboard.sort(function (a, b) { return b.score - a.score; });
     profile.leaderboard = profile.leaderboard.slice(0, 20);
     saveProfile();
@@ -215,7 +258,7 @@
     hideAllScreens(); show(hud.leaderboard);
   }
   function buildLeaderboard(note) {
-    hud.lbSub.textContent = note || 'Ranked runs — score = 🍓 × 10 − seconds. Higher is better.';
+    hud.lbSub.textContent = note || 'Ranked runs — score = 🍓 × 10 − seconds, +' + PERFECT_BONUS + ' for a ⭐ perfect (all 10 goldens).';
     var lb = profile.leaderboard || [];
     if (!lb.length) {
       hud.lbBody.innerHTML = '<div class="lb-empty">No ranked runs yet. Finish all ' + RANKED_COUNT + ' levels to make the board.</div>';
@@ -223,11 +266,13 @@
       var newest = lb.reduce(function (m, e, i) { return e.date > lb[m].date ? i : m; }, 0);
       var rows = lb.map(function (e, i) {
         var you = (i === newest) ? ' class="you"' : '';
+        var star = e.perfect ? ' ⭐' : '';
+        var golds = (e.golds != null ? e.golds : (e.perfect ? RANKED_COUNT : 0));
         return '<tr' + you + '><td class="lb-rank">#' + (i + 1) + '</td><td>' + escapeHtml(e.name) +
-          '</td><td class="num">' + e.berries + ' 🍓</td><td class="num">' + fmtTime(e.time) +
-          '</td><td class="num">' + e.score + '</td></tr>';
+          '</td><td class="num">' + golds + '/' + RANKED_COUNT + ' 🌟</td><td class="num">' + e.berries + ' 🍓</td><td class="num">' + fmtTime(e.time) +
+          '</td><td class="num">' + e.score + star + '</td></tr>';
       }).join('');
-      hud.lbBody.innerHTML = '<table class="lb-table"><thead><tr><th></th><th>Name</th><th>🍓</th><th>Time</th><th>Score</th></tr></thead><tbody>' + rows + '</tbody></table>';
+      hud.lbBody.innerHTML = '<table class="lb-table"><thead><tr><th></th><th>Name</th><th>Gold</th><th>🍓</th><th>Time</th><th>Score</th></tr></thead><tbody>' + rows + '</tbody></table>';
     }
     hud.lbButtons.innerHTML = '';
     [ { label: 'Play ranked again', onClick: startRanked },
@@ -331,6 +376,42 @@
     else if (r === 'leaderboard') show(hud.leaderboard);
     else show(hud.overlay);
   }
+  // ---- settings -----------------------------------------------------------
+  function openSettings() { buildSettings(); hideAllScreens(); show(hud.settings); }
+  function closeSettings() { if (input.cancelCapture) input.cancelCapture(); showMenu(); }
+
+  function buildSettings() {
+    var st = profile.settings, body = hud.settingsBody;
+    body.innerHTML = '';
+
+    // Double-tap toggle
+    var r1 = document.createElement('div'); r1.className = 'set-row';
+    var l1 = document.createElement('div');
+    l1.innerHTML = '<div class="set-label">Double-tap to dash</div>' +
+      '<div class="set-desc">Quickly tapping a direction twice performs a dash. Turn off if you dash by accident.</div>';
+    var tog = document.createElement('div'); tog.className = 'toggle' + (st.doubleTapDash ? ' on' : '');
+    tog.innerHTML = '<div class="knob"></div>';
+    tog.addEventListener('click', function () { st.doubleTapDash = !st.doubleTapDash; saveProfile(); buildSettings(); });
+    r1.appendChild(l1); r1.appendChild(tog); body.appendChild(r1);
+
+    // Dash key rebind
+    var r2 = document.createElement('div'); r2.className = 'set-row';
+    var l2 = document.createElement('div');
+    l2.innerHTML = '<div class="set-label">Dash key</div>' +
+      '<div class="set-desc">Hold a direction and press this key to dash. Movement keys, Space and Enter can’t be used.</div>';
+    var kb = document.createElement('button'); kb.className = 'keybtn';
+    kb.textContent = GameInput.keyLabel(st.dashKey);
+    kb.addEventListener('click', function () {
+      kb.classList.add('listening'); kb.textContent = 'Press a key… (Esc cancels)';
+      input.captureNextKey(function (code) {
+        kb.classList.remove('listening');
+        if (code) { st.dashKey = code; saveProfile(); }
+        buildSettings();
+      });
+    });
+    r2.appendChild(l2); r2.appendChild(kb); body.appendChild(r2);
+  }
+
   function hbRow(k, v) { return '<div class="hb-row"><div class="k">' + k + '</div><div class="v">' + v + '</div></div>'; }
   function buildHandbook() {
     var C = GL.C, h = '';
@@ -339,12 +420,13 @@
       hbRow('Dash', 'Double-tap a direction (or press Shift). A burst of speed that spends ' + C.DASH_COST + ' 🍓.') +
       hbRow('Goal', 'Reach the food truck at the top of each ground.') + '</div>';
     h += '<div class="hb-section"><h3>Modes</h3>' +
-      hbRow('Ranked', 'The 10 fixed campaign levels (same for everyone). Finish all 10 to log your score on the leaderboard.') +
+      hbRow('Ranked', 'The 10 fixed campaign levels (same for everyone). Finish all 10 to log your score on the leaderboard. Your run is saved — quit and Resume anytime.') +
       hbRow('Endless', 'Freshly generated levels forever, untracked — for practice and fun.') +
-      hbRow('Score', 'On the leaderboard: 🍓 remaining × 10 − seconds. Bank berries and go fast.') + '</div>';
+      hbRow('Score', 'On the leaderboard: 🍓 remaining × 10 − seconds. Bank berries and go fast.') +
+      hbRow('⭐ Perfect run', 'Collect the golden strawberry on all 10 ranked levels for a ⭐ PERFECT score (+' + PERFECT_BONUS + ' bonus). You must grab it on the run where you clear each level.') + '</div>';
     h += '<div class="hb-section"><h3>Strawberries &amp; hearts</h3>' +
       hbRow('Strawberries 🍓', 'Currency AND fuel. Collect them, spend on dashes and gear. They carry between levels.') +
-      hbRow('Golden strawberry', 'One per level, worth ' + C.GOLD_VALUE + ' 🍓 — usually somewhere risky.') +
+      hbRow('Golden strawberry', 'One per level, worth ' + C.GOLD_VALUE + ' 🍓, hidden somewhere random in the final section near the food truck. Grab them all for a perfect run.') +
       hbRow('Hearts', C.HEARTS + ' per level. A hit costs a heart + ' + C.HIT_BERRY_LOSS + ' 🍓 and sends you to your last checkpoint. Zero = retry.') +
       hbRow('Sloth', 'Stand still ' + C.SLOTH_GRACE + 's and you drop a 🍓 every ' + C.SLOTH_INTERVAL + 's.') +
       hbRow('Warm days', 'Hotter levels (heat haze) slow you. Linen Whites or a cooler level help.') + '</div>';
@@ -416,7 +498,7 @@
     for (var i = 0; i < evts.length; i++) {
       var e = evts[i];
       if (e.type === 'berry') pulse(hud.berries);
-      else if (e.type === 'goldBerry') { pulse(hud.berries); toast('Golden strawberry! +' + GL.C.GOLD_VALUE + ' 🍓'); }
+      else if (e.type === 'goldBerry') { pulse(hud.berries); shell.goldenThisLevel = true; toast('Golden strawberry! +' + GL.C.GOLD_VALUE + ' 🍓'); }
       else if (e.type === 'photobomb' && e.lost > 0) { pulse(hud.berries); toast('Photobombed! −' + e.lost + ' 🍓'); }
       else if (e.type === 'slothLoss') pulse(hud.berries);
       else if (e.type === 'sprinklerHit') { pulse(hud.berries); toast('Soaked! −' + e.lost + ' 🍓'); }
@@ -463,29 +545,42 @@
 
   // ---- menu ---------------------------------------------------------------
   function showMenu() {
-    shell.runMode = 'ranked'; shell.levelIndex = 0;
     shell.game = GL.createGame(GL.LEVELS[0], 20260710, currentLoadout());
     GR.setupCanvas(canvas, shell.game);
     var best = profile.bestTime !== null ? ' · best ' + fmtTime(profile.bestTime) : '';
+    var r = profile.run;
+    var buttons = [];
+    if (r && r.active) {
+      var where = r.runMode === 'endless' ? 'Endless ' + r.endlessNum : 'Level ' + (r.levelIndex + 1) + '/' + RANKED_COUNT;
+      buttons.push({ label: 'Resume (' + where + ')', onClick: resumeRun });
+    }
+    buttons.push({ label: r && r.active ? 'New ranked run' : 'Play ranked', onClick: startRanked });
+    buttons.push({ label: 'Endless mode', onClick: startEndless });
+    buttons.push({ label: 'Leaderboard', ghost: true, onClick: function () { showLeaderboard(); } });
+    buttons.push({ label: 'Settings', ghost: true, onClick: openSettings });
+    buttons.push({ label: 'Handbook', ghost: true, onClick: function () { openHandbook('overlay'); } });
     overlay('Strawberry Rush 🍓',
-      'Cross ' + RANKED_COUNT + ' grounds to the food truck. Move freely; double-tap (or Shift) to dash. ' +
-      'Strawberries are your currency — spend them on gear in the shop between levels. Finish all ' +
-      RANKED_COUNT + ' to make the leaderboard, then play ranked again or go Endless.' + best,
-      [{ label: 'Play ranked', onClick: startRanked },
-       { label: 'Endless mode', onClick: startEndless },
-       { label: 'Leaderboard', ghost: true, onClick: function () { showLeaderboard(); } },
-       { label: 'Handbook', ghost: true, onClick: function () { openHandbook('overlay'); } }]);
+      'Cross ' + RANKED_COUNT + ' grounds to the food truck. Move freely; double-tap (or your dash key) to dash. ' +
+      'Strawberries are your currency — spend them on gear in the shop between levels (and after a death). ' +
+      'Your run is saved, so you can quit and resume. Finish all ' + RANKED_COUNT + ' to make the leaderboard.' + best,
+      buttons);
     shell.mode = 'menu';
     updateHud();
   }
 
   // ---- boot ---------------------------------------------------------------
-  input = GameInput.createInput(onDash, onAction);
+  input = GameInput.createInput(onDash, onAction, profile.settings);
   window.addEventListener('resize', function () { if (shell.game) GR.resize(canvas, shell.game); });
   el('shop-continue').addEventListener('click', startLevel);
   el('shop-handbook').addEventListener('click', function () { openHandbook('shop'); });
-  el('shop-quit').addEventListener('click', showMenu);
+  el('shop-quit').addEventListener('click', toMenu);
   el('handbook-close').addEventListener('click', closeHandbook);
+  el('settings-close').addEventListener('click', closeSettings);
+  el('settings-reset').addEventListener('click', function () {
+    profile.settings.doubleTapDash = DEFAULT_SETTINGS.doubleTapDash;
+    profile.settings.dashKey = DEFAULT_SETTINGS.dashKey;
+    saveProfile(); buildSettings();
+  });
 
   showMenu();
   requestAnimationFrame(frame);

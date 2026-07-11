@@ -454,7 +454,10 @@
     for (var ff = 0; ff < (m.formations || 0); ff++) addFormation(rng, zones, cols, npcs);
     for (var bkl = 0; bkl < (m.ballkidLines || 0); bkl++) addBallkidLine(rng, zones, cols, npcs);
 
-    var gb = findClearTile(occ, hedgeSet, 1, Math.min(4, rows - 2), cols, rng, true);
+    // Golden berry: a RANDOM clear tile anywhere in the final (top) zone —
+    // the "end section" the player crosses last — so it's not always a corner.
+    var endZone = zones[0];
+    var gb = findClearTile(occ, hedgeSet, 1, endZone.rowMax, cols, rng, false);
 
     var def = {
       name: spec.name, intro: spec.intro || '', theme: spec.theme, warmth: spec.warmth,

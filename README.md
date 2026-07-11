@@ -23,12 +23,16 @@ Firefox, Safari and Edge. Total payload is a few tens of KB.
 
 - **Ranked** — the 10 fixed campaign levels (identical for every player, so
   the leaderboard is fair). Finish all ten and your score —
-  **strawberries banked × 10 − seconds** — is logged. Starting a fresh
-  ranked run **resets everything**: no gear, no strawberries, a clean race.
+  **strawberries banked × 10 − seconds** — is logged. Collect the **golden
+  strawberry on all 10 levels** for a **⭐ PERFECT run** (+250 bonus).
+  Starting a fresh ranked run **resets everything**: no gear, no
+  strawberries, a clean race. Your run is **saved to the browser** — quit to
+  the menu and **Resume** right where you left off.
 - **Endless** — the same generator with a random seed, scaling up forever
   and untracked, for practice and fun.
 
-Between every level a **shop** lets you spend strawberries on gear, and
+Between every level (**and after a death**) a **shop** lets you spend
+strawberries on gear, and
 after clearing a level you can **Continue** or **Replay** it.
 
 ## Controls
@@ -47,8 +51,21 @@ explains every control, hazard, item, and passive.
 
 Strawberries are both your fuel and your money. Collect them on the ground;
 they **carry between levels** as your bank. A dash spends 3. Each level
-hides a **golden strawberry worth 5**, usually somewhere risky. The **shop**
-spends them on gear.
+hides a **golden strawberry worth 5** at a **random spot in the final
+section** near the food truck. Grab it on all 10 ranked levels for a
+**perfect run**. The **shop** spends strawberries on gear.
+
+## Settings
+
+A **Settings** screen (from the menu) lets you tune dashing:
+
+- **Double-tap to dash** — turn the double-tap trigger on or off (handy if
+  you dash by accident while weaving).
+- **Dash key** — rebind it from the default **Shift** to any key (movement
+  keys, Space and Enter are reserved). Press the button and hit a key;
+  Escape cancels.
+
+Settings persist in the browser.
 
 ## The shop & loadout
 
