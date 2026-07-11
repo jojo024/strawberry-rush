@@ -458,6 +458,7 @@
 
     var def = {
       name: spec.name, intro: spec.intro || '', theme: spec.theme, warmth: spec.warmth,
+      truckColorIndex: spec.truckColorIndex || 0,
       cols: cols, rows: rows, startCol: spec.startCol, startRow: rows - 1,
       zones: zones, hedges: hedges, walls: walls, barriers: [], trees: trees, blankets: blankets,
       sprinklers: sprinklers, photographers: photographers, tennisCourts: tennisCourts,
@@ -521,7 +522,7 @@
       cols: 21, rows: _rows, startCol: 10, zoneNames: zoneNamesFor(_zc),
       pathZones: _n >= 3 ? [1] : [], speedBump: 0.03 * _n,
       mechanics: rankedMechanics(_n), seed: 1000 + _n * 97,
-      berryCount: Math.round(_rows * 0.6)
+      berryCount: Math.round(_rows * 0.6), truckColorIndex: _n
     });
   }
   var LEVELS = RANKED_SPECS.map(genLevel);
@@ -538,7 +539,7 @@
       cols: 21, rows: rows, startCol: 10, zoneNames: zoneNamesFor(zc),
       pathZones: [1], speedBump: 0.02 * Math.min(n, 10),
       mechanics: rankedMechanics(diff), seed: (seed ^ Math.imul(n, 2654435761)) >>> 0,
-      berryCount: Math.round(rows * 0.6)
+      berryCount: Math.round(rows * 0.6), truckColorIndex: (n - 1)
     };
   }
   function generateEndless(n, seed) { return genLevel(makeEndlessSpec(n, seed === undefined ? 12345 : seed)); }

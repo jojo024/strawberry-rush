@@ -652,91 +652,121 @@
   // A proper food truck: rounded cream van, red skirt, cab with a windscreen,
   // big wheels, a roof sign, and a striped awning over a serving hatch with a
   // chalkboard menu, condiments, a bun and a vendor inside.
-  function drawTruck(ctx, game, cam) {
-    var w = TILE * 5.2, h = TILE * 1.4;
-    var x = (game.cols * TILE - w) / 2, y = TILE * 0.02 - cam - h * 0.42;
-    var night = S.dark;
-    ellipseShadow(ctx, x + w / 2, y + h + 5, w * 0.52, 0.3);
+  // A distinct food-truck colourway per level (stable — keyed off the level
+  // name, so each ranked level looks different and endless levels vary too).
+  var TRUCK_COLORS = [
+    { body: '#e8862e', dark: '#c96a1c', sign: '#7a1f28' }, // orange (the hot-dog van)
+    { body: '#e0473f', dark: '#b7302a', sign: '#3a2018' }, // red
+    { body: '#3f9b8e', dark: '#2c7568', sign: '#22403a' }, // teal
+    { body: '#5a7fc0', dark: '#3f5f9c', sign: '#26324e' }, // blue
+    { body: '#8a5fc9', dark: '#6a41a8', sign: '#3a2a63' }, // purple
+    { body: '#e2b93b', dark: '#c2991c', sign: '#5a4410' }, // sunflower
+    { body: '#5aa84e', dark: '#3f8a37', sign: '#244019' }, // green
+    { body: '#d86a8f', dark: '#b84d70', sign: '#4e2436' }, // rose
+    { body: '#d0504a', dark: '#a83c37', sign: '#3a1a18' }, // tomato
+    { body: '#4a9db0', dark: '#357a8c', sign: '#22404a' }  // cyan
+  ];
+  function truckColor(game) {
+    var i = (game.level.truckColorIndex != null) ? game.level.truckColorIndex : hashStr(game.level.name);
+    return TRUCK_COLORS[((i % TRUCK_COLORS.length) + TRUCK_COLORS.length) % TRUCK_COLORS.length];
+  }
 
-    // wheels (behind the body)
-    var wy = y + h * 0.98;
-    [0.2, 0.8].forEach(function (fx) {
+  function drawTruck(ctx, game, cam) {
+    var col = truckColor(game), night = S.dark;
+    var w = TILE * 4.2, h = TILE * 2.35;            // taller, van-like proportions
+    var x = (game.cols * TILE - w) / 2;
+    var y = TILE * 0.98 - cam - h;                  // base sits just above row 0
+    var baseY = y + h;
+    ellipseShadow(ctx, x + w / 2, baseY + 4, w * 0.5, 0.32);
+
+    // ---- wheels (drawn first, so the body overlaps their tops) ----
+    var wy = baseY - TILE * 0.04;
+    [0.24, 0.78].forEach(function (fx) {
       var wx = x + w * fx;
-      ctx.fillStyle = '#15151b'; ctx.beginPath(); ctx.arc(wx, wy, TILE * 0.24, 0, 7); ctx.fill();
-      ctx.fillStyle = '#c9ced6'; ctx.beginPath(); ctx.arc(wx, wy, TILE * 0.11, 0, 7); ctx.fill();
-      ctx.fillStyle = '#8b929c'; ctx.beginPath(); ctx.arc(wx, wy, TILE * 0.05, 0, 7); ctx.fill();
+      ctx.fillStyle = '#15151b'; ctx.beginPath(); ctx.arc(wx, wy, TILE * 0.3, 0, 7); ctx.fill();
+      ctx.fillStyle = '#c9ced6'; ctx.beginPath(); ctx.arc(wx, wy, TILE * 0.14, 0, 7); ctx.fill();
+      ctx.fillStyle = '#8b929c'; ctx.beginPath(); ctx.arc(wx, wy, TILE * 0.06, 0, 7); ctx.fill();
       ctx.strokeStyle = '#6b7078'; ctx.lineWidth = 1.5;
-      for (var s = 0; s < 5; s++) { var a = s * 1.256 + 0.3; ctx.beginPath(); ctx.moveTo(wx, wy); ctx.lineTo(wx + Math.cos(a) * TILE * 0.1, wy + Math.sin(a) * TILE * 0.1); ctx.stroke(); }
+      for (var s = 0; s < 5; s++) { var a = s * 1.256 + 0.3; ctx.beginPath(); ctx.moveTo(wx, wy); ctx.lineTo(wx + Math.cos(a) * TILE * 0.12, wy + Math.sin(a) * TILE * 0.12); ctx.stroke(); }
     });
 
-    // body
-    var bodyY = y + h * 0.16, bodyH = h * 0.82;
-    var g = ctx.createLinearGradient(0, bodyY, 0, bodyY + bodyH);
-    g.addColorStop(0, '#f4ead2'); g.addColorStop(0.55, '#efe0c2'); g.addColorStop(1, '#e2cfa8');
-    ctx.fillStyle = g; roundRect(ctx, x, bodyY, w, bodyH, 12); ctx.fill();
-    ctx.fillStyle = '#d0403f'; roundRect(ctx, x, bodyY + bodyH * 0.7, w, bodyH * 0.3, 10); ctx.fill();
-    ctx.fillStyle = '#b7332f'; ctx.fillRect(x, bodyY + bodyH * 0.68, w, 3);
-    // cab (right) with windscreen + mirror + headlight
-    ctx.fillStyle = '#e7d7b4'; roundRect(ctx, x + w * 0.72, bodyY, w * 0.28, bodyH * 0.72, 10); ctx.fill();
-    var glass = ctx.createLinearGradient(0, bodyY, 0, bodyY + bodyH * 0.45);
-    glass.addColorStop(0, '#bfe0ea'); glass.addColorStop(1, '#8fb9c8');
-    ctx.fillStyle = glass; roundRect(ctx, x + w * 0.75, bodyY + bodyH * 0.1, w * 0.2, bodyH * 0.34, 6); ctx.fill();
-    ctx.fillStyle = '#c9ced6'; ctx.fillRect(x + w * 0.99, bodyY + bodyH * 0.2, 5, 4);
-    ctx.fillStyle = night ? '#fff2c0' : '#e9dcc0';
-    ctx.beginPath(); ctx.arc(x + w * 0.985, bodyY + bodyH * 0.6, TILE * 0.07, 0, 7); ctx.fill();
+    // ---- tall colored body ----
+    var bTop = y + h * 0.12, bBot = wy - TILE * 0.05, bH = bBot - bTop;
+    var g = ctx.createLinearGradient(0, bTop, 0, bBot);
+    g.addColorStop(0, lighten(col.body, 0.14)); g.addColorStop(0.5, col.body); g.addColorStop(1, col.dark);
+    ctx.fillStyle = g; roundRect(ctx, x, bTop, w, bH, 13); ctx.fill();
+    ctx.fillStyle = col.dark; roundRect(ctx, x, bBot - bH * 0.15, w, bH * 0.15, 9); ctx.fill(); // lower trim band
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(x + 6, bTop + bH * 0.08, w - 12, 3); // roof highlight
 
-    // roof sign
-    var sgy = y - h * 0.06;
-    ctx.fillStyle = '#7a1f28'; roundRect(ctx, x + w * 0.16, sgy - h * 0.24, w * 0.5, h * 0.3, 6); ctx.fill();
-    ctx.fillStyle = '#fff6e6'; ctx.font = 'bold ' + Math.round(TILE * 0.34) + 'px Georgia, serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('LUNCH', x + w * 0.37, sgy - h * 0.09);
-    ctx.fillStyle = '#e23b46'; ctx.beginPath(); ctx.arc(x + w * 0.2, sgy - h * 0.09, TILE * 0.11, 0, 7); ctx.fill();
-    ctx.fillStyle = '#3f9143'; ctx.beginPath(); ctx.ellipse(x + w * 0.2, sgy - h * 0.15, TILE * 0.07, TILE * 0.03, 0, 0, 7); ctx.fill();
+    // ---- cab (right end): panel + slanted windshield + headlight + mirror ----
+    var cabW = w * 0.28, cabX = x + w - cabW;
+    ctx.fillStyle = col.dark; roundRect(ctx, cabX, bTop + bH * 0.14, cabW, bH * 0.86, 11); ctx.fill();
+    var glass = ctx.createLinearGradient(0, bTop, 0, bTop + bH * 0.55);
+    glass.addColorStop(0, '#d2edf4'); glass.addColorStop(1, '#8fb9c8');
+    ctx.fillStyle = glass;
+    ctx.beginPath();
+    ctx.moveTo(cabX + cabW * 0.16, bTop + bH * 0.24); ctx.lineTo(cabX + cabW * 0.92, bTop + bH * 0.24);
+    ctx.lineTo(cabX + cabW * 0.92, bTop + bH * 0.5); ctx.lineTo(cabX + cabW * 0.16, bTop + bH * 0.5);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = night ? '#fff2c0' : '#f0e4c4';
+    ctx.beginPath(); ctx.arc(cabX + cabW * 0.92, bTop + bH * 0.7, TILE * 0.08, 0, 7); ctx.fill();
+    ctx.fillStyle = '#c9ced6'; ctx.fillRect(cabX - 4, bTop + bH * 0.34, 5, 5); // wing mirror
 
-    // serving hatch + chalkboard menu + counter
-    var hx = x + w * 0.06, hw = w * 0.6, hyv = bodyY + bodyH * 0.14, hh = bodyH * 0.5;
-    ctx.fillStyle = '#2a2320'; roundRect(ctx, hx, hyv, hw, hh, 5); ctx.fill();
-    ctx.fillStyle = '#20302a'; ctx.fillRect(hx + 6, hyv + 5, hw * 0.42, hh - 10);
-    ctx.strokeStyle = 'rgba(240,240,230,0.5)'; ctx.lineWidth = 1;
-    for (var ml = 0; ml < 4; ml++) { var ly = hyv + 12 + ml * (hh - 18) / 4; ctx.beginPath(); ctx.moveTo(hx + 10, ly); ctx.lineTo(hx + 6 + hw * 0.34, ly); ctx.stroke(); }
-    ctx.fillStyle = '#e6b84a'; ctx.fillRect(hx + 10, hyv + 7, hw * 0.2, 2);
-    var cy2 = hyv + hh - 4;
-    ctx.fillStyle = '#cdb183'; ctx.fillRect(hx, cy2, hw, 5);
-    ctx.fillStyle = '#d84b3f'; ctx.fillRect(hx + hw * 0.56, cy2 - 9, 4, 9);
-    ctx.fillStyle = '#e8c33a'; ctx.fillRect(hx + hw * 0.62, cy2 - 9, 4, 9);
-    ctx.fillStyle = '#e2a15a'; roundRect(ctx, hx + hw * 0.72, cy2 - 6, 14, 6, 3); ctx.fill();
-    ctx.fillStyle = '#c0392b'; ctx.fillRect(hx + hw * 0.73, cy2 - 5, 12, 2);
-    ctx.fillStyle = '#1a1520'; ctx.beginPath(); ctx.arc(hx + hw * 0.5, hyv + hh * 0.42, 7, 0, 7); ctx.fill();
-    ctx.fillRect(hx + hw * 0.5 - 10, hyv + hh * 0.42 + 5, 20, hh * 0.4);
+    // ---- serving window (dark) with chalkboard, counter, food, vendor ----
+    var wx0 = x + w * 0.05, ww = w * 0.62, wy0 = bTop + bH * 0.26, wh = bH * 0.44;
+    ctx.fillStyle = '#241d1a'; roundRect(ctx, wx0, wy0, ww, wh, 5); ctx.fill();
     if (night) {
-      var hg = ctx.createRadialGradient(hx + hw * 0.5, hyv + hh * 0.5, 4, hx + hw * 0.5, hyv + hh * 0.5, hw * 0.7);
-      hg.addColorStop(0, COMMON.bulbGlow + '0.22)'); hg.addColorStop(1, COMMON.bulbGlow + '0)');
-      ctx.fillStyle = hg; ctx.fillRect(hx - 10, hyv - 10, hw + 20, hh + 20);
+      var hg = ctx.createRadialGradient(wx0 + ww * 0.5, wy0 + wh * 0.5, 4, wx0 + ww * 0.5, wy0 + wh * 0.5, ww * 0.7);
+      hg.addColorStop(0, COMMON.bulbGlow + '0.25)'); hg.addColorStop(1, COMMON.bulbGlow + '0)');
+      ctx.fillStyle = hg; ctx.fillRect(wx0 - 10, wy0 - 10, ww + 20, wh + 20);
     }
+    ctx.fillStyle = '#20302a'; ctx.fillRect(wx0 + 5, wy0 + 5, ww * 0.34, wh - 10); // chalkboard
+    ctx.strokeStyle = 'rgba(240,240,230,0.5)'; ctx.lineWidth = 1;
+    for (var ml = 0; ml < 4; ml++) { var ly = wy0 + 13 + ml * (wh - 20) / 4; ctx.beginPath(); ctx.moveTo(wx0 + 9, ly); ctx.lineTo(wx0 + 5 + ww * 0.3, ly); ctx.stroke(); }
+    ctx.fillStyle = '#e6b84a'; ctx.fillRect(wx0 + 9, wy0 + 9, ww * 0.17, 2);
+    var cby = wy0 + wh - 5;
+    ctx.fillStyle = '#cdb183'; ctx.fillRect(wx0, cby, ww, 5);                       // counter
+    ctx.fillStyle = '#e2a15a'; roundRect(ctx, wx0 + ww * 0.48, cby - 7, 16, 7, 3); ctx.fill(); // bun
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(wx0 + ww * 0.49, cby - 6, 14, 2);       // sausage
+    ctx.fillStyle = '#e8c33a'; ctx.fillRect(wx0 + ww * 0.5, cby - 5, 12, 1.5);      // mustard
+    ctx.fillStyle = '#d84b3f'; ctx.fillRect(wx0 + ww * 0.74, cby - 11, 4, 11);      // ketchup bottle
+    ctx.fillStyle = '#e8c33a'; ctx.fillRect(wx0 + ww * 0.8, cby - 11, 4, 11);       // mustard bottle
+    ctx.fillStyle = '#1a1520'; ctx.beginPath(); ctx.arc(wx0 + ww * 0.4, wy0 + wh * 0.42, 7, 0, 7); ctx.fill(); // vendor
+    ctx.fillRect(wx0 + ww * 0.4 - 10, wy0 + wh * 0.42 + 5, 20, wh * 0.4);
 
-    // striped scalloped awning + strung bulbs
-    var ay = hyv - h * 0.12, stripeW = hw / 8;
+    // ---- striped scalloped awning over the window (coloured to match) ----
+    var ay = wy0 - TILE * 0.04, stripeW = ww / 8, aDrop = TILE * 0.34;
+    ctx.fillStyle = col.dark; ctx.fillRect(wx0, ay - 2, ww, 3); // support rail
     for (var stp = 0; stp < 8; stp++) {
-      ctx.fillStyle = stp % 2 === 0 ? '#d0403f' : '#f4ead2';
+      ctx.fillStyle = stp % 2 === 0 ? col.dark : '#f7efe0';
       ctx.beginPath();
-      ctx.moveTo(hx + stp * stripeW, ay); ctx.lineTo(hx + (stp + 1) * stripeW, ay);
-      ctx.lineTo(hx + (stp + 1) * stripeW, ay + h * 0.12);
-      ctx.lineTo(hx + stp * stripeW + stripeW * 0.5, ay + h * 0.17);
-      ctx.lineTo(hx + stp * stripeW, ay + h * 0.12); ctx.closePath(); ctx.fill();
+      ctx.moveTo(wx0 + stp * stripeW, ay); ctx.lineTo(wx0 + (stp + 1) * stripeW, ay);
+      ctx.lineTo(wx0 + (stp + 1) * stripeW, ay + aDrop * 0.68);
+      ctx.lineTo(wx0 + stp * stripeW + stripeW * 0.5, ay + aDrop);
+      ctx.lineTo(wx0 + stp * stripeW, ay + aDrop * 0.68); ctx.closePath(); ctx.fill();
     }
     for (var bb = 0; bb <= 8; bb++) {
-      var bx = hx + bb * hw / 8, tw = 0.6 + 0.4 * Math.sin(game.time * 4 + bb);
-      if (S.glow > 0.15) { ctx.fillStyle = COMMON.bulbGlow + (0.3 * tw * S.glow) + ')'; ctx.beginPath(); ctx.arc(bx, ay + h * 0.19, 5, 0, 7); ctx.fill(); }
-      ctx.fillStyle = S.glow > 0.15 ? COMMON.bulb : '#e9d9b4'; ctx.beginPath(); ctx.arc(bx, ay + h * 0.19, 1.8, 0, 7); ctx.fill();
+      var lbx = wx0 + bb * ww / 8, tw = 0.6 + 0.4 * Math.sin(game.time * 4 + bb);
+      if (S.glow > 0.15) { ctx.fillStyle = COMMON.bulbGlow + (0.3 * tw * S.glow) + ')'; ctx.beginPath(); ctx.arc(lbx, ay + aDrop, 5, 0, 7); ctx.fill(); }
+      ctx.fillStyle = S.glow > 0.15 ? COMMON.bulb : '#e9d9b4'; ctx.beginPath(); ctx.arc(lbx, ay + aDrop, 1.8, 0, 7); ctx.fill();
     }
 
-    // steam
-    ctx.fillStyle = 'rgba(255,255,255,0.32)';
+    // ---- roof sign board ----
+    var sgW = w * 0.62, sgH = TILE * 0.52, sgX = x + w * 0.04, sgY = bTop - sgH * 0.62;
+    ctx.fillStyle = col.sign; roundRect(ctx, sgX, sgY, sgW, sgH, 6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.14)'; ctx.fillRect(sgX + 4, sgY + 4, sgW - 8, 2);
+    ctx.fillStyle = '#fff6e6'; ctx.font = 'bold ' + Math.round(TILE * 0.35) + 'px Georgia, serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('LUNCH', sgX + sgW * 0.62, sgY + sgH * 0.52);
+    ctx.fillStyle = '#e23b46'; ctx.beginPath(); ctx.arc(sgX + sgW * 0.2, sgY + sgH * 0.58, TILE * 0.12, 0, 7); ctx.fill();
+    ctx.fillStyle = '#3f9143'; ctx.beginPath(); ctx.ellipse(sgX + sgW * 0.2, sgY + sgH * 0.34, TILE * 0.08, TILE * 0.035, 0, 0, 7); ctx.fill();
+
+    // ---- steam curling up from the hatch ----
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
     for (var sp = 0; sp < 3; sp++) {
       var tt = (game.time * 0.7 + sp * 0.33) % 1;
       ctx.beginPath();
-      ctx.arc(hx + hw * (0.3 + sp * 0.16) + Math.sin(game.time * 2 + sp) * 4, hyv - 6 - tt * 26, 3 + tt * 6, 0, 7); ctx.fill();
+      ctx.arc(wx0 + ww * (0.34 + sp * 0.16) + Math.sin(game.time * 2 + sp) * 4, wy0 - 6 - tt * 26, 3 + tt * 6, 0, 7); ctx.fill();
     }
   }
 
