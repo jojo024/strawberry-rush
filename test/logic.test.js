@@ -138,6 +138,30 @@ test('dash spends exactly DASH_COST and keeps the rest', () => {
   assert.ok(y0 - g.player.y > C.PLAYER_SPEED * C.DASH_TIME * 1.5, 'a real burst of speed');
 });
 
+test('dash fires in the pressed direction, not the drift direction', () => {
+  const g = GL.createGame(quietLevel(), 1);
+  g.strawberries = 9;
+  placePlayer(g, 3, 6);
+  GL.setMove(g, -1, 0);       // drifting left
+  run(g, 0.1);
+  const x0 = g.player.x, y0 = g.player.y;
+  assert.equal(GL.tryDash(g, 0, -1), true, 'dash up while moving left');
+  run(g, C.DASH_TIME);
+  assert.ok(y0 - g.player.y > 2, 'moved UP a lot');
+  assert.ok(Math.abs(g.player.x - x0) < 0.3, 'barely moved horizontally');
+});
+
+test('dash with no direction falls back to current facing', () => {
+  const g = GL.createGame(quietLevel(), 1);
+  g.strawberries = 6;
+  placePlayer(g, 3, 6);
+  GL.setMove(g, 1, 0); run(g, 0.05); GL.setMove(g, 0, 0); // now facing right
+  const x0 = g.player.x;
+  assert.equal(GL.tryDash(g, 0, 0), true);
+  run(g, C.DASH_TIME);
+  assert.ok(g.player.x - x0 > 2, 'dashed the way it was facing (right)');
+});
+
 test('a dash below the cost is refused and costs nothing', () => {
   const g = GL.createGame(quietLevel(), 1);
   g.strawberries = C.DASH_COST - 1;
@@ -403,6 +427,9 @@ test('wanderers stay in their band and off blocked tiles, in EVERY level', () =>
     const g = GL.createGame(GL.LEVELS[li], 99 + li);
     run(g, 8);
     for (const npc of g.npcs) {
+      // Marchers/ball-kids are formations: they cross the full width and wrap
+      // past the edges, ignoring terrain (like lane traffic) — excluded here.
+      if (npc.type === 'marcher' || npc.type === 'ballkid') continue;
       assert.ok(npc.x >= -0.001 && npc.x <= g.cols - 1 + 0.001, `L${li + 1} x in world`);
       assert.ok(npc.y >= npc.yMin - 0.001 && npc.y <= npc.yMax + 0.001,
                 `L${li + 1} ${npc.type} stays in its band`);
@@ -429,9 +456,11 @@ test('grouped wanderers stay together as parties', () => {
 });
 
 test('seated picnickers hold their spot', () => {
-  const g = GL.createGame(GL.LEVELS[1], 3);
+  const li = GL.LEVELS.findIndex(L => (L.npcs || []).some(n => n.type === 'seated'));
+  assert.ok(li >= 0, 'some ranked level seats picnickers on rugs');
+  const g = GL.createGame(GL.LEVELS[li], 3);
   const before = g.npcs.filter(n => n.type === 'seated').map(n => [n.x, n.y]);
-  assert.ok(before.length >= 3);
+  assert.ok(before.length >= 2);
   run(g, 10);
   assert.deepEqual(g.npcs.filter(n => n.type === 'seated').map(n => [n.x, n.y]), before);
 });
@@ -455,6 +484,34 @@ test('stewards & security patrol routes never cross blocked tiles', () => {
 
 // ---------------------------------------------------------------- levels & win
 
+test('later levels feature crossing formations and lines of six ball kids', () => {
+  // Formations (marchers) appear in the late ranked levels…
+  const anyMarcher = GL.LEVELS.some(L => (L.npcs || []).some(n => n.type === 'marcher'));
+  assert.ok(anyMarcher, 'a marching-crowd formation exists somewhere late');
+  const early = GL.LEVELS.slice(0, 6).some(L => (L.npcs || []).some(n => n.type === 'marcher'));
+  assert.ok(!early, 'no formations in the first six levels');
+  // …ball kids come as lines of exactly six with a shared uniform colour.
+  const withKids = GL.LEVELS.find(L => (L.npcs || []).some(n => n.type === 'ballkid'));
+  assert.ok(withKids, 'some level has ball kids');
+  const kids = withKids.npcs.filter(n => n.type === 'ballkid');
+  assert.equal(kids.length % 6, 0, 'ball kids come in groups of six');
+  assert.ok(kids.every(n => n.uniform === 'green' || n.uniform === 'purple'), 'green or purple uniforms');
+});
+
+test('formation members march across their row and wrap at the edges', () => {
+  const g = GL.createGame(quietLevel({
+    npcs: [{ type: 'marcher', col: 3, row: 4, dir: 1, speed: 2 }]
+  }), 1);
+  const mch = g.npcs.find(n => n.type === 'marcher');
+  assert.ok(mch, 'marcher spawned');
+  const y0 = mch.y;
+  run(g, 0.3);
+  assert.ok(mch.x > 3, 'moved along its row');
+  assert.equal(mch.y, y0, 'stays on its row');
+  run(g, 10); // long enough to wrap around
+  assert.ok(mch.x >= -1.6 && mch.x <= g.cols - 1 + 1.6, 'wrapped within the lane margins');
+});
+
 test('reaching the top row wins the level', () => {
   const g = GL.createGame(quietLevel(), 1);
   GL.setMove(g, 0, -1); run(g, 5);
@@ -462,15 +519,39 @@ test('reaching the top row wins the level', () => {
   assert.ok(g.events.some(e => e.type === 'won'));
 });
 
-test('the campaign has 8 levels with rising size and defined themes', () => {
-  assert.equal(GL.LEVELS.length, 8);
-  for (let i = 1; i < GL.LEVELS.length; i++) {
-    assert.ok(GL.LEVELS[i].rows >= GL.LEVELS[i - 1].rows, 'levels grow (or hold)');
+test('the ranked campaign has 10 long levels with rising size and themes', () => {
+  assert.equal(GL.LEVELS.length, 10);
+  for (let i = 0; i < GL.LEVELS.length; i++) {
+    assert.ok(GL.LEVELS[i].rows >= 44, 'levels are at least ~2x the old length');
+    if (i > 0) assert.ok(GL.LEVELS[i].rows >= GL.LEVELS[i - 1].rows, 'levels grow (or hold)');
+    assert.ok(typeof GL.LEVELS[i].theme === 'string' && GL.LEVELS[i].theme.length, 'has a theme');
+    assert.ok(GL.LEVELS[i].warmth >= 0 && GL.LEVELS[i].warmth <= 1, 'warmth in range');
+    assert.ok(GL.LEVELS[i].goldenBerry, 'every level has a golden berry');
   }
-  for (const L of GL.LEVELS) {
-    assert.ok(typeof L.theme === 'string' && L.theme.length, 'has a theme');
-    assert.ok(L.warmth >= 0 && L.warmth <= 1, 'warmth in range');
-    assert.ok(L.goldenBerry, 'every level has a golden berry');
+});
+
+test('the generator is deterministic; endless levels are valid & winnable', () => {
+  // ranked levels are identical each load (fixed seeds — fair leaderboard)
+  const a = GL.createGame(GL.LEVELS[6], 1), b = GL.createGame(GL.LEVELS[6], 1);
+  assert.deepEqual(a.terrain.map(r => r.map(c => c.block)), b.terrain.map(r => r.map(c => c.block)));
+  for (let n = 1; n <= 6; n++) {
+    const d1 = GL.generateEndless(n, 777), d2 = GL.generateEndless(n, 777);
+    assert.deepEqual(d1.hedges, d2.hedges, 'endless is deterministic for a (n, seed)');
+    assert.ok(d1.rows >= 46, 'endless levels are long too');
+    const g = GL.createGame(d1, n);
+    const seen = new Set(), q = [[d1.startCol, d1.startRow]];
+    seen.add(d1.startCol + ',' + d1.startRow);
+    let reached = false;
+    while (q.length) {
+      const [c, r] = q.shift();
+      if (r === 0) { reached = true; break; }
+      for (const [dc, dr] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+        const nc = c + dc, nr = r + dr, k = nc + ',' + nr;
+        if (!seen.has(k) && GL.tileWalkable(g, nc, nr)) { seen.add(k); q.push([nc, nr]); }
+      }
+    }
+    assert.ok(reached, 'endless level ' + n + ' is winnable on foot');
+    assert.ok(g.berries.some(x => x.golden), 'endless level has a golden berry');
   }
 });
 

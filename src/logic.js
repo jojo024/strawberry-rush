@@ -101,7 +101,12 @@
                   thinkMin: 0.9, thinkMax: 1.8 },
     seated:     { radius: 0.30, speedMin: 0, speedMax: 0, turn: 0,
                   stopChance: 0, jitterMin: 1, jitterMax: 1,
-                  thinkMin: 99, thinkMax: 99 }
+                  thinkMin: 99, thinkMax: 99 },
+    // Formation members move in lockstep across the screen (see stepMarcher).
+    marcher:    { radius: 0.44, speedMin: 1, speedMax: 1, turn: 0,
+                  stopChance: 0, jitterMin: 1, jitterMax: 1, thinkMin: 99, thinkMax: 99 },
+    ballkid:    { radius: 0.26, speedMin: 1, speedMax: 1, turn: 0,
+                  stopChance: 0, jitterMin: 1, jitterMax: 1, thinkMin: 99, thinkMax: 99 }
   };
 
   // ---------------------------------------------------------------------
@@ -193,263 +198,346 @@
   }
 
   // ---------------------------------------------------------------------
-  // THE LEVELS. 21 cols wide (wide grid = zoomed-out camera). Difficulty and
-  // mechanics ramp deliberately; `intro` documents what each level adds.
+  // LEVEL GENERATOR. Levels are grown procedurally from a compact spec so
+  // they can be long, endless, and consistently balanced. The 10 ranked
+  // levels use fixed seeds (identical for every player — fair leaderboard);
+  // endless mode reuses the same generator with a run-derived seed.
+  //
+  // Placement is validated: hedge gates are always open (2 tiles wide, one
+  // left + one right), point hazards are sparse and never seal a row, walls
+  // are short partial segments off the hedge rows, and patrols are laid only
+  // on rows with a long clear run — so connectivity and patrol-clearance
+  // hold by construction (a BFS relaxation pass is a final safety net).
   // ---------------------------------------------------------------------
-  var LEVELS = buildLevels();
-
-  function buildLevels() {
-    function L(spec) {
-      // spec.zoneNames drives zones+hedges; spec fills the rest.
-      var zh = zonesFor(spec.rows, spec.zoneNames);
-      var zones = zh.zones;
-      // paint concourse ground on the 2nd-from-top zone if asked
-      (spec.pathZones || []).forEach(function (zi) {
-        if (zones[zi]) zones[zi].ground = 'path';
-      });
-      (spec.speedScales || []).forEach(function (v, zi) {
-        if (zones[zi]) zones[zi].speedScale = v;
-      });
-      var hedges = zh.hedgeRows.map(function (row, i) {
-        var gaps = (spec.gates && spec.gates[i]) || defaultGates(spec.cols, i);
-        return { row: row, gaps: gaps };
-      });
-      return {
-        name: spec.name, intro: spec.intro,
-        theme: spec.theme, warmth: spec.warmth,
-        cols: spec.cols, rows: spec.rows,
-        startCol: spec.startCol, startRow: spec.rows - 1,
-        zones: zones, hedges: hedges,
-        walls: spec.walls || [],
-        barriers: spec.barriers || [],
-        trees: spec.trees || [],
-        blankets: spec.blankets || [],
-        sprinklers: spec.sprinklers || [],
-        photographers: spec.photographers || [],
-        tennisCourts: spec.tennisCourts || [],
-        npcs: spec.npcs || [],
-        berryCount: spec.berryCount,
-        goldenBerry: spec.goldenBerry
-      };
+  function shuffle(arr, rng) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(rng() * (i + 1)), t = arr[i]; arr[i] = arr[j]; arr[j] = t;
     }
-    function defaultGates(cols, i) {
-      // Alternate two 2-wide gates so routes zig-zag between levels.
-      return i % 2 === 0 ? [4, 5, cols - 6, cols - 5] : [7, 8, cols - 9, cols - 8];
-    }
-
-    var cols = 21;
-    return [
-      // ---- L1: the gentlest. Only wandering picnickers. ----
-      L({
-        name: 'The Garden Gate', theme: 'dawn', warmth: 0.0,
-        intro: 'Just the crowd — genteel folk wandering and changing direction.',
-        cols: cols, rows: 22, startCol: 10,
-        zoneNames: ['The Long Lawn', 'The Approach', 'Garden Gate'],
-        trees: [{ col: 3, row: 18, kind: 'tree' }, { col: 17, row: 5, kind: 'tree' },
-                { col: 15, row: 12, kind: 'umbrella' }, { col: 5, row: 8, kind: 'tree' }],
-        npcs: [
-          { type: 'posh', count: 3, rowMin: 15, rowMax: 20, group: 'gate1' },
-          { type: 'posh', count: 3, rowMin: 15, rowMax: 20, group: 'gate2' },
-          { type: 'posh', count: 2, rowMin: 15, rowMax: 20 },
-          { type: 'posh', count: 3, rowMin: 8, rowMax: 13, group: 'mid1' },
-          { type: 'posh', count: 3, rowMin: 8, rowMax: 13, group: 'mid2' },
-          { type: 'posh', count: 2, rowMin: 8, rowMax: 13 },
-          { type: 'posh', count: 3, rowMin: 1, rowMax: 6, group: 'lawn1' },
-          { type: 'posh', count: 3, rowMin: 1, rowMax: 6, group: 'lawn2' }
-        ],
-        berryCount: 16, goldenBerry: { col: 1, row: 1 }
-      }),
-      // ---- L2: add picnic rugs + a first sprinkler + a wheelchair line. ----
-      L({
-        name: 'The Picnic Lawn', theme: 'morning', warmth: 0.15,
-        intro: 'New: picnic rugs slow your step, and a sprinkler starts up.',
-        cols: cols, rows: 24, startCol: 10,
-        zoneNames: ['Upper Lawn', 'The Terrace', 'Lower Lawn'],
-        trees: [{ col: 2, row: 20, kind: 'umbrella' }, { col: 18, row: 15, kind: 'tree' },
-                { col: 10, row: 9, kind: 'tree' }],
-        blankets: [{ col: 3, row: 15, w: 3, h: 2 }, { col: 14, row: 16, w: 3, h: 2 },
-                   { col: 8, row: 20, w: 2, h: 1 }],
-        sprinklers: [{ col: 10, row: 4 }],
-        npcs: [
-          { type: 'posh', count: 3, rowMin: 17, rowMax: 22, group: 'q1' },
-          { type: 'seated', col: 3.4, row: 15.3 }, { type: 'seated', col: 4.5, row: 15.5 },
-          { type: 'seated', col: 3.7, row: 16.4 },
-          { type: 'seated', col: 14.5, row: 16.3 }, { type: 'seated', col: 15.6, row: 16.5 },
-          { type: 'wheelchair', count: 1, rowMin: 17, rowMax: 22 },
-          { type: 'posh', count: 3, rowMin: 9, rowMax: 14, group: 'm1' },
-          { type: 'wheelchair', count: 1, rowMin: 9, rowMax: 14 },
-          { type: 'posh', count: 3, rowMin: 1, rowMax: 6, group: 'l1' },
-          { type: 'posh', count: 3, rowMin: 1, rowMax: 6, group: 'l2' }
-        ],
-        berryCount: 18, goldenBerry: { col: 19, row: 1 }
-      }),
-      // ---- L3: add chaotic sprinting children + more sprinklers. ----
-      L({
-        name: "The Children's Field", theme: 'midday', warmth: 0.35,
-        intro: 'New: children — tiny, fast, and utterly unpredictable.',
-        cols: cols, rows: 26, startCol: 10,
-        zoneNames: ['Top Lawn', 'Middle Field', 'The Meadow', 'Bottom Lawn'],
-        trees: [{ col: 4, row: 22, kind: 'tree' }, { col: 16, row: 17, kind: 'umbrella' },
-                { col: 8, row: 11, kind: 'tree' }, { col: 14, row: 4, kind: 'tree' }],
-        blankets: [{ col: 2, row: 17, w: 2, h: 2 }, { col: 15, row: 18, w: 2, h: 1 }],
-        sprinklers: [{ col: 6, row: 20 }, { col: 13, row: 8 }],
-        npcs: [
-          { type: 'posh', count: 3, rowMin: 20, rowMax: 24, group: 'q1' },
-          { type: 'kid', count: 3, rowMin: 20, rowMax: 24, group: 'kids1' },
-          { type: 'kid', count: 3, rowMin: 13, rowMax: 18, group: 'kids2' },
-          { type: 'posh', count: 2, rowMin: 13, rowMax: 18 },
-          { type: 'kid', count: 3, rowMin: 7, rowMax: 11, group: 'kids3' },
-          { type: 'posh', count: 2, rowMin: 7, rowMax: 11, group: 'p3' },
-          { type: 'wheelchair', count: 1, rowMin: 7, rowMax: 11 },
-          { type: 'kid', count: 2, rowMin: 1, rowMax: 5, group: 'kids4' },
-          { type: 'posh', count: 3, rowMin: 1, rowMax: 5, group: 'p4' }
-        ],
-        berryCount: 20, goldenBerry: { col: 1, row: 1 }
-      }),
-      // ---- L4: NOON, hot & slow. Add photographers + stewards. ----
-      L({
-        name: 'The Photographers’ Concourse', theme: 'noon', warmth: 0.85,
-        intro: 'New: photographers’ flashes, patrolling stewards — and midday heat slows you.',
-        cols: cols, rows: 28, startCol: 10,
-        zoneNames: ['Courtside', 'The Concourse', 'Press Pen', 'The Forecourt'],
-        pathZones: [1, 2],
-        trees: [{ col: 3, row: 24, kind: 'tree' }, { col: 18, row: 20, kind: 'umbrella' },
-                { col: 10, row: 13, kind: 'tree' }, { col: 6, row: 4, kind: 'umbrella' }],
-        blankets: [{ col: 14, row: 24, w: 2, h: 1 }],
-        sprinklers: [{ col: 8, row: 25 }, { col: 15, row: 6 }],
-        photographers: [{ row: 10, leftCol: 2 }, { row: 16, leftCol: 13 },
-                        { row: 4, leftCol: 8 }],
-        barriers: [{ row: 20, c0: 6, c1: 12 }],
-        npcs: [
-          { type: 'posh', count: 3, rowMin: 22, rowMax: 26, group: 'q1' },
-          { type: 'kid', count: 3, rowMin: 22, rowMax: 26, group: 'k1' },
-          { type: 'steward', waypoints: [[2, 14], [18, 14]] },
-          { type: 'posh', count: 3, rowMin: 15, rowMax: 19, group: 'm1' },
-          { type: 'wheelchair', count: 2, rowMin: 15, rowMax: 19 },
-          { type: 'steward', waypoints: [[4, 8], [16, 8]] },
-          { type: 'kid', count: 3, rowMin: 8, rowMax: 13, group: 'k2' },
-          { type: 'posh', count: 2, rowMin: 8, rowMax: 13 },
-          { type: 'kid', count: 2, rowMin: 1, rowMax: 6, group: 'k3' },
-          { type: 'posh', count: 2, rowMin: 1, rowMax: 6 }
-        ],
-        berryCount: 22, goldenBerry: { col: 19, row: 1 }
-      }),
-      // ---- L5: add autograph fans + SECURITY guards (accreditation!). ----
-      L({
-        name: 'The Members’ Enclosure', theme: 'afternoon', warmth: 0.55,
-        intro: 'New: autograph fans give chase — and security guards hunt anyone without a pass.',
-        cols: cols, rows: 30, startCol: 10,
-        zoneNames: ['Royal Box', 'The Enclosure', 'Members’ Lawn', 'The Gate'],
-        pathZones: [1],
-        trees: [{ col: 2, row: 26, kind: 'tree' }, { col: 17, row: 22, kind: 'umbrella' },
-                { col: 9, row: 15, kind: 'tree' }, { col: 13, row: 5, kind: 'tree' }],
-        blankets: [{ col: 5, row: 26, w: 2, h: 2 }, { col: 14, row: 20, w: 2, h: 1 }],
-        sprinklers: [{ col: 11, row: 24 }, { col: 7, row: 11 }],
-        photographers: [{ row: 12, leftCol: 3 }, { row: 6, leftCol: 12 }],
-        npcs: [
-          { type: 'posh', count: 3, rowMin: 24, rowMax: 28, group: 'q1' },
-          { type: 'kid', count: 2, rowMin: 24, rowMax: 28, group: 'k1' },
-          { type: 'security', waypoints: [[3, 19], [10, 19]] },
-          { type: 'posh', count: 3, rowMin: 16, rowMax: 21, group: 'm1' },
-          { type: 'fan', col: 16, row: 20, rowMin: 16, rowMax: 21 },
-          { type: 'wheelchair', count: 1, rowMin: 16, rowMax: 21 },
-          { type: 'kid', count: 2, rowMin: 8, rowMax: 13, group: 'k2' },
-          { type: 'posh', count: 2, rowMin: 8, rowMax: 13 },
-          { type: 'posh', count: 3, rowMin: 1, rowMax: 6, group: 'box1' }
-        ],
-        berryCount: 24, goldenBerry: { col: 1, row: 1 }
-      }),
-      // ---- L6: add TENNIS BALLS on practice courts. ----
-      L({
-        name: 'The Practice Courts', theme: 'goldenhour', warmth: 0.3,
-        intro: 'New: live tennis — flying balls will bowl you over. Bring a racket.',
-        cols: cols, rows: 32, startCol: 10,
-        zoneNames: ['Show Court', 'Practice Courts', 'The Walkway', 'The Approach'],
-        pathZones: [2],
-        trees: [{ col: 3, row: 28, kind: 'tree' }, { col: 18, row: 24, kind: 'umbrella' },
-                { col: 10, row: 8, kind: 'tree' }],
-        blankets: [{ col: 6, row: 28, w: 2, h: 1 }],
-        sprinklers: [{ col: 14, row: 27 }],
-        photographers: [{ row: 21, leftCol: 8 }, { row: 5, leftCol: 3 }],
-        tennisCourts: [
-          { colMin: 2, colMax: 18, rowMin: 12, rowMax: 17, balls: 2, speed: 6.2 },
-          { colMin: 3, colMax: 17, rowMin: 1, rowMax: 6, balls: 1, speed: 6.8 }
-        ],
-        npcs: [
-          { type: 'posh', count: 3, rowMin: 26, rowMax: 30, group: 'q1' },
-          { type: 'kid', count: 3, rowMin: 26, rowMax: 30, group: 'k1' },
-          { type: 'security', waypoints: [[3, 20], [17, 20]] },
-          { type: 'posh', count: 2, rowMin: 19, rowMax: 23 },
-          { type: 'fan', col: 16, row: 21, rowMin: 19, rowMax: 23 },
-          { type: 'wheelchair', count: 2, rowMin: 8, rowMax: 10 },
-          { type: 'posh', count: 2, rowMin: 1, rowMax: 6, group: 'court1' }
-        ],
-        berryCount: 26, goldenBerry: { col: 19, row: 1 }
-      }),
-      // ---- L7: dense remix — everything, more balls & security. ----
-      L({
-        name: 'Centre Court', theme: 'dusk', warmth: 0.15,
-        intro: 'Everything at once now: dense crowds, balls, flashes, patrols.',
-        cols: cols, rows: 34, startCol: 10,
-        zoneNames: ['Centre Court', 'The Baseline', 'Trophy Walk', 'The Gate'],
-        pathZones: [2],
-        walls: [{ row: 20, c0: 0, c1: 4 }, { row: 20, c0: 16, c1: 20 }, { row: 28, c0: 6, c1: 14 }],
-        trees: [{ col: 2, row: 30, kind: 'tree' }, { col: 18, row: 26, kind: 'umbrella' },
-                { col: 10, row: 19, kind: 'tree' }],
-        blankets: [{ col: 5, row: 30, w: 2, h: 1 }, { col: 14, row: 21, w: 2, h: 1 }],
-        sprinklers: [{ col: 8, row: 29 }, { col: 13, row: 20 }, { col: 6, row: 6 }],
-        photographers: [{ row: 16, leftCol: 2 }, { row: 12, leftCol: 12 }, { row: 5, leftCol: 8 }],
-        tennisCourts: [
-          { colMin: 2, colMax: 18, rowMin: 1, rowMax: 7, balls: 2, speed: 6.8 }
-        ],
-        npcs: [
-          { type: 'posh', count: 3, rowMin: 28, rowMax: 32, group: 'q1' },
-          { type: 'kid', count: 3, rowMin: 28, rowMax: 32, group: 'k1' },
-          { type: 'security', waypoints: [[2, 25], [18, 25]] },
-          { type: 'steward', waypoints: [[5, 18], [15, 18]] },
-          { type: 'posh', count: 3, rowMin: 19, rowMax: 23, group: 'm1' },
-          { type: 'fan', col: 15, row: 21, rowMin: 19, rowMax: 23 },
-          { type: 'wheelchair', count: 2, rowMin: 19, rowMax: 23 },
-          { type: 'security', waypoints: [[3, 13], [17, 13]] },
-          { type: 'kid', count: 3, rowMin: 10, rowMax: 15, group: 'k2' },
-          { type: 'posh', count: 2, rowMin: 10, rowMax: 15 }
-        ],
-        berryCount: 28, goldenBerry: { col: 1, row: 1 }
-      }),
-      // ---- L8: floodlit night finale — maximum everything. ----
-      L({
-        name: 'The Champions’ Gala', theme: 'night', warmth: 0.05,
-        intro: 'The floodlit finale. Every hazard, at full tilt. Good luck.',
-        cols: cols, rows: 36, startCol: 10,
-        zoneNames: ['Champions’ Lawn', 'Centre Court', 'The Enclosure', 'Trophy Walk', 'The Forecourt'],
-        pathZones: [1, 3],
-        walls: [{ row: 31, c0: 7, c1: 13 }, { row: 13, c0: 0, c1: 4 }, { row: 13, c0: 16, c1: 20 }],
-        trees: [{ col: 3, row: 32, kind: 'tree' }, { col: 18, row: 27, kind: 'umbrella' },
-                { col: 10, row: 22, kind: 'tree' }, { col: 6, row: 10, kind: 'tree' }],
-        blankets: [{ col: 14, row: 23, w: 2, h: 1 }],
-        sprinklers: [{ col: 6, row: 31 }, { col: 15, row: 24 }, { col: 9, row: 17 }, { col: 12, row: 6 }],
-        photographers: [{ row: 26, leftCol: 3 }, { row: 20, leftCol: 13 },
-                        { row: 16, leftCol: 5 }, { row: 5, leftCol: 9 }],
-        tennisCourts: [
-          { colMin: 2, colMax: 18, rowMin: 8, rowMax: 12, balls: 2, speed: 7.0 },
-          { colMin: 3, colMax: 17, rowMin: 1, rowMax: 5, balls: 2, speed: 7.4 }
-        ],
-        npcs: [
-          { type: 'posh', count: 3, rowMin: 30, rowMax: 34, group: 'q1' },
-          { type: 'kid', count: 3, rowMin: 30, rowMax: 34, group: 'k1' },
-          { type: 'security', waypoints: [[2, 27], [17, 27]] },
-          { type: 'security', waypoints: [[4, 25], [16, 25], [16, 23], [4, 23]] },
-          { type: 'posh', count: 3, rowMin: 21, rowMax: 25, group: 'm1' },
-          { type: 'fan', col: 15, row: 23, rowMin: 21, rowMax: 25 },
-          { type: 'wheelchair', count: 2, rowMin: 21, rowMax: 25 },
-          { type: 'kid', count: 3, rowMin: 14, rowMax: 18, group: 'k2' },
-          { type: 'fan', col: 6, row: 15, rowMin: 14, rowMax: 18 },
-          { type: 'security', waypoints: [[3, 15], [17, 15]] }
-        ],
-        berryCount: 30, goldenBerry: { col: 19, row: 1 }
-      })
-    ];
+    return arr;
   }
+
+  function pickGates(rng, cols) {
+    var half = Math.floor(cols / 2);
+    var g1 = 1 + Math.floor(rng() * Math.max(1, half - 3));
+    var g2 = half + 1 + Math.floor(rng() * Math.max(1, cols - 4 - half));
+    g1 = Math.max(1, Math.min(g1, half - 2));
+    g2 = Math.max(half + 1, Math.min(g2, cols - 3));
+    return [g1, g1 + 1, g2, g2 + 1];
+  }
+
+  function placeWall(rng, occ, hedgeSet, rows, cols) {
+    for (var t = 0; t < 24; t++) {
+      var r = 3 + Math.floor(rng() * (rows - 6));
+      if (hedgeSet[r]) continue;
+      var len = 3 + Math.floor(rng() * 4);       // 3..6 tiles
+      if (len > cols - 9) continue;              // always leave a wide opening
+      var side = rng() < 0.5 ? 0 : 1;
+      var c0 = side ? (cols - 1 - len - Math.floor(rng() * 2)) : Math.floor(rng() * 2);
+      c0 = Math.max(0, Math.min(cols - 1 - len, c0));
+      var ok = true;
+      for (var c = c0; c <= c0 + len; c++) { if (occ[r][c]) { ok = false; break; } }
+      if (!ok) continue;
+      for (var c2 = c0; c2 <= c0 + len; c2++) occ[r][c2] = 1;
+      return { row: r, c0: c0, c1: c0 + len };
+    }
+    return null;
+  }
+
+  function placePoints(rng, occ, hedgeSet, rows, cols, count, cb) {
+    var placed = 0, tries = 0;
+    while (placed < count && tries < count * 40 + 40) {
+      tries++;
+      var r = 2 + Math.floor(rng() * (rows - 4));
+      var c = 1 + Math.floor(rng() * (cols - 2));
+      if (hedgeSet[r] || occ[r][c]) continue;
+      occ[r][c] = 1; cb(c, r); placed++;
+    }
+  }
+
+  function placePhotographer(rng, occ, hedgeSet, rows, cols) {
+    for (var t = 0; t < 40; t++) {
+      var r = 2 + Math.floor(rng() * (rows - 4));
+      if (hedgeSet[r]) continue;
+      var lc = 1 + Math.floor(rng() * (cols - 5));
+      if (occ[r][lc] || occ[r][lc + 1] || occ[r][lc + 2] || occ[r][lc + 3]) continue;
+      occ[r][lc] = 1; occ[r][lc + 3] = 1;
+      return { row: r, leftCol: lc };
+    }
+    return null;
+  }
+
+  function placeCourt(rng, zones, cols, idx, balls, speed) {
+    var zi = Math.min(zones.length - 1, idx + Math.floor(rng() * Math.max(1, zones.length - 1)));
+    var z = zones[zi];
+    var h = Math.min(5, z.rowMax - z.rowMin);
+    if (h < 3) return null;
+    var rowMin = z.rowMin + Math.floor(rng() * Math.max(1, z.rowMax - z.rowMin - h));
+    rowMin = Math.max(1, Math.min(rowMin, z.rowMax - h));
+    return { colMin: 2, colMax: cols - 3, rowMin: rowMin, rowMax: rowMin + h, balls: balls, speed: speed };
+  }
+
+  function placeBlanket(rng, occ, zones, hedgeSet, rows, cols) {
+    for (var t = 0; t < 30; t++) {
+      var z = zones[Math.floor(rng() * zones.length)];
+      if (z.ground === 'path') continue;
+      var w = 2 + Math.floor(rng() * 2), h = 1 + Math.floor(rng() * 2);
+      var c = 1 + Math.floor(rng() * Math.max(1, cols - 2 - w));
+      var r = z.rowMin + Math.floor(rng() * Math.max(1, z.rowMax - z.rowMin - h));
+      var ok = true;
+      for (var rr = r; rr < r + h && ok; rr++) {
+        if (hedgeSet[rr]) { ok = false; break; }
+        for (var cc = c; cc < c + w; cc++) { if (occ[rr][cc]) { ok = false; break; } }
+      }
+      if (!ok) continue;
+      return { col: c, row: r, w: w, h: h };
+    }
+    return null;
+  }
+
+  function longestRun(occ, r, cols) {
+    var best = null, bs = 0, s = -1;
+    for (var c = 0; c <= cols; c++) {
+      if (c < cols && occ[r][c] === 0) { if (s < 0) s = c; }
+      else { if (s >= 0) { var len = c - s; if (len > bs) { bs = len; best = [s, c - 1]; } } s = -1; }
+    }
+    return best;
+  }
+
+  function findClearPatrol(rng, occ, hedgeSet, zones, cols, minLen) {
+    var rowsList = [];
+    zones.forEach(function (z) { for (var r = z.rowMin; r <= z.rowMax; r++) if (!hedgeSet[r]) rowsList.push(r); });
+    shuffle(rowsList, rng);
+    for (var i = 0; i < rowsList.length; i++) {
+      var run = longestRun(occ, rowsList[i], cols);
+      if (run && (run[1] - run[0] + 1) >= minLen) {
+        var c0 = run[0] + 1, c1 = run[1] - 1;
+        if (c1 - c0 + 1 >= minLen - 2) return { row: rowsList[i], c0: c0, c1: c1 };
+      }
+    }
+    return null;
+  }
+
+  // A big crowd crossing in formation — 2-3 rows deep with a 2-wide gap
+  // corridor you must slot into and track as it slides across.
+  function addFormation(rng, zones, cols, npcs) {
+    var zi = Math.max(0, Math.min(zones.length - 2, 1 + Math.floor(rng() * Math.max(1, zones.length - 2))));
+    var z = zones[zi];
+    var bandRows = [], r0 = z.rowMin + 1;
+    for (var r = r0; r <= Math.min(z.rowMax - 1, r0 + 1); r++) bandRows.push(r); // 2 rows deep
+    if (bandRows.length < 1) return;
+    var dir = rng() < 0.5 ? 1 : -1;
+    var speed = 0.9 + rng() * 0.3;                          // slow enough to read
+    var spacing = 1.6, slots = Math.ceil((cols + 3) / spacing);
+    var gap = 1 + Math.floor(rng() * Math.max(1, slots - 4));
+    for (var s = 0; s < slots; s++) {
+      if (s >= gap && s <= gap + 2) continue;              // a generous 3-wide corridor
+      var x = -1.5 + s * spacing;
+      for (var b = 0; b < bandRows.length; b++) npcs.push({ type: 'marcher', col: x, row: bandRows[b], dir: dir, speed: speed });
+    }
+  }
+
+  // A line of six ball kids in matching green or purple, jogging across.
+  function addBallkidLine(rng, zones, cols, npcs) {
+    var z = zones[Math.floor(rng() * zones.length)];
+    var r = z.rowMin + Math.floor(rng() * (z.rowMax - z.rowMin + 1));
+    var dir = rng() < 0.5 ? 1 : -1;
+    var speed = 1.8 + rng() * 0.5;
+    var uniform = rng() < 0.5 ? 'green' : 'purple';
+    var spacing = 1.4, base = 1 + rng() * Math.max(1, cols - 8);
+    for (var k = 0; k < 6; k++) npcs.push({ type: 'ballkid', col: base + k * spacing, row: r, dir: dir, speed: speed, uniform: uniform });
+  }
+
+  function placeFan(rng, occ, zones, hedgeSet, cols) {
+    for (var t = 0; t < 30; t++) {
+      var z = zones[Math.floor(rng() * zones.length)];
+      var r = z.rowMin + Math.floor(rng() * (z.rowMax - z.rowMin + 1));
+      var c = 1 + Math.floor(rng() * (cols - 2));
+      if (hedgeSet[r] || occ[r][c]) continue;
+      return { type: 'fan', col: c, row: r, rowMin: z.rowMin, rowMax: z.rowMax };
+    }
+    return null;
+  }
+
+  function findClearTile(occ, hedgeSet, rMin, rMax, cols, rng, preferCorner) {
+    if (preferCorner) {
+      var corners = [[0, rMin], [cols - 1, rMin], [0, rMin + 1], [cols - 1, rMin + 1]];
+      for (var i = 0; i < corners.length; i++) {
+        var c = corners[i][0], r = corners[i][1];
+        if (!hedgeSet[r] && !occ[r][c]) return { col: c, row: r };
+      }
+    }
+    for (var t = 0; t < 200; t++) {
+      var r2 = rMin + Math.floor(rng() * (rMax - rMin + 1)), c2 = Math.floor(rng() * cols);
+      if (!hedgeSet[r2] && !occ[r2][c2]) return { col: c2, row: r2 };
+    }
+    return { col: 0, row: 1 };
+  }
+
+  function terrainConnected(def) {
+    var terrain = buildTerrain(def), rows = def.rows, cols = def.cols;
+    var seen = {}, q = [[def.startCol, def.startRow]];
+    seen[def.startCol + ',' + def.startRow] = 1;
+    while (q.length) {
+      var p = q.shift();
+      if (p[1] === 0) return true;
+      var dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+      for (var i = 0; i < 4; i++) {
+        var nc = p[0] + dirs[i][0], nr = p[1] + dirs[i][1], k = nc + ',' + nr;
+        if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) continue;
+        if (!seen[k] && terrain[nr][nc].block === null) { seen[k] = 1; q.push([nc, nr]); }
+      }
+    }
+    return false;
+  }
+
+  function genLevel(spec) {
+    var cols = spec.cols, rows = spec.rows;
+    var rng = makeRng(spec.seed >>> 0);
+    var zh = zonesFor(rows, spec.zoneNames);
+    var zones = zh.zones, hedgeRows = zh.hedgeRows;
+    var hedgeSet = {}; hedgeRows.forEach(function (r) { hedgeSet[r] = 1; });
+    (spec.pathZones || []).forEach(function (zi) { if (zones[zi]) zones[zi].ground = 'path'; });
+    zones.forEach(function (z, i) {
+      var t = (zones.length - 1 - i) / Math.max(1, zones.length - 1); // 0 bottom .. 1 top
+      z.speedScale = 0.9 + 0.35 * t + (spec.speedBump || 0);
+    });
+
+    var occ = []; for (var r = 0; r < rows; r++) { var row = []; for (var c = 0; c < cols; c++) row.push(0); occ.push(row); }
+    var hedges = hedgeRows.map(function (hr) {
+      var gaps = pickGates(rng, cols);
+      for (var cc = 0; cc < cols; cc++) if (gaps.indexOf(cc) === -1) occ[hr][cc] = 1;
+      return { row: hr, gaps: gaps };
+    });
+
+    var m = spec.mechanics || {};
+    var walls = [];
+    for (var wi = 0; wi < (m.walls || 0); wi++) { var wl = placeWall(rng, occ, hedgeSet, rows, cols); if (wl) walls.push(wl); }
+    var trees = [];
+    placePoints(rng, occ, hedgeSet, rows, cols, m.trees || 0, function (c2, r2) { trees.push({ col: c2, row: r2, kind: 'tree' }); });
+    placePoints(rng, occ, hedgeSet, rows, cols, m.umbrellas || 0, function (c2, r2) { trees.push({ col: c2, row: r2, kind: 'umbrella' }); });
+    var sprinklers = [];
+    placePoints(rng, occ, hedgeSet, rows, cols, m.sprinklers || 0, function (c2, r2) { sprinklers.push({ col: c2, row: r2 }); });
+    var photographers = [];
+    for (var pi = 0; pi < (m.photographers || 0); pi++) { var ph = placePhotographer(rng, occ, hedgeSet, rows, cols); if (ph) photographers.push(ph); }
+    var tennisCourts = [];
+    for (var ci = 0; ci < (m.courtCount || 0); ci++) { var ct = placeCourt(rng, zones, cols, ci, m.ballsPerCourt || 2, m.ballSpeed || 6.5); if (ct) tennisCourts.push(ct); }
+
+    var blankets = [], seated = [];
+    for (var bi = 0; bi < (m.rugs || 0); bi++) {
+      var bl = placeBlanket(rng, occ, zones, hedgeSet, rows, cols);
+      if (!bl) continue;
+      blankets.push(bl);
+      var sn = 2 + (rng() < 0.5 ? 1 : 0);
+      for (var si = 0; si < sn; si++) {
+        seated.push({ type: 'seated', col: bl.col + 0.4 + (si % bl.w) * 0.9, row: bl.row + 0.4 + Math.floor(si / bl.w) * 0.9 });
+      }
+    }
+
+    var npcs = [];
+    zones.forEach(function (z, i) {
+      var groups = 1 + (rng() < 0.55 ? 1 : 0) + (m.crowd > 1 ? 1 : 0);
+      for (var g = 0; g < groups; g++) npcs.push({ type: 'posh', count: 3, rowMin: z.rowMin, rowMax: z.rowMax, group: 'p' + i + '_' + g });
+      // A dollop of extra slow-moving picnickers everywhere — busier grounds.
+      npcs.push({ type: 'posh', count: 2 + (m.slowExtra || 0), rowMin: z.rowMin, rowMax: z.rowMax });
+      if (m.wheelchairs) npcs.push({ type: 'wheelchair', count: 1 + (rng() < 0.4 ? 1 : 0), rowMin: z.rowMin, rowMax: z.rowMax });
+      if (m.kids && rng() < 0.85) npcs.push({ type: 'kid', count: 3, rowMin: z.rowMin, rowMax: z.rowMax, group: 'k' + i });
+    });
+    seated.forEach(function (s) { npcs.push(s); });
+    for (var fi = 0; fi < (m.fans || 0); fi++) { var fn = placeFan(rng, occ, zones, hedgeSet, cols); if (fn) npcs.push(fn); }
+    for (var stw = 0; stw < (m.stewards || 0); stw++) { var pr = findClearPatrol(rng, occ, hedgeSet, zones, cols, 7); if (pr) npcs.push({ type: 'steward', waypoints: [[pr.c0, pr.row], [pr.c1, pr.row]] }); }
+    for (var scy = 0; scy < (m.security || 0); scy++) { var pr2 = findClearPatrol(rng, occ, hedgeSet, zones, cols, 7); if (pr2) npcs.push({ type: 'security', waypoints: [[pr2.c0, pr2.row], [pr2.c1, pr2.row]] }); }
+    // Late-game "crossing crowd" formations and lines of ball kids.
+    for (var ff = 0; ff < (m.formations || 0); ff++) addFormation(rng, zones, cols, npcs);
+    for (var bkl = 0; bkl < (m.ballkidLines || 0); bkl++) addBallkidLine(rng, zones, cols, npcs);
+
+    var gb = findClearTile(occ, hedgeSet, 1, Math.min(4, rows - 2), cols, rng, true);
+
+    var def = {
+      name: spec.name, intro: spec.intro || '', theme: spec.theme, warmth: spec.warmth,
+      cols: cols, rows: rows, startCol: spec.startCol, startRow: rows - 1,
+      zones: zones, hedges: hedges, walls: walls, barriers: [], trees: trees, blankets: blankets,
+      sprinklers: sprinklers, photographers: photographers, tennisCourts: tennisCourts,
+      npcs: npcs, berryCount: spec.berryCount || Math.round(rows * 0.6), goldenBerry: gb
+    };
+    // Safety net: relax the two blocking hazard classes if anything sealed the path.
+    if (!terrainConnected(def)) def.walls = [];
+    if (!terrainConnected(def)) def.photographers = [];
+    return def;
+  }
+
+  // ---- ranked campaign: 10 fixed-seed levels, each ~2x the old length ----
+  var THEME_ARR = ['dawn', 'morning', 'midday', 'noon', 'afternoon', 'goldenhour', 'dusk', 'dusk', 'night', 'night'];
+  var WARMTH_ARR = [0.0, 0.15, 0.35, 0.85, 0.6, 0.35, 0.2, 0.15, 0.1, 0.05];
+  var NAME_ARR = ['The Garden Gate', 'The Long Lawn', 'The Children’s Field', 'The Midday Concourse',
+    'The Members’ Enclosure', 'The Practice Courts', 'The Terrace Gauntlet', 'Centre Court',
+    'The Semi-Final', 'The Champions’ Gala'];
+  var INTRO_ARR = [
+    'Just the crowd — genteel folk wandering and changing direction.',
+    'New: picnic rugs slow your step, and a sprinkler starts up.',
+    'New: children — tiny, fast, and utterly unpredictable.',
+    'New: photographers’ flashes and patrolling stewards — and midday heat slows you.',
+    'New: autograph fans give chase, and security guards hunt anyone without a pass.',
+    'New: live tennis — flying balls will bowl you over. Bring a racket.',
+    'Everything at once now, and the grounds keep getting longer.',
+    'Dense crowds, balls, flashes and patrols across the show court.',
+    'The penultimate test — every hazard, at pace.',
+    'The floodlit finale. Good luck.'
+  ];
+  var ZONE_POOL = ['The Forecourt', 'The Queue', 'Garden Gate', 'The Terrace', 'The Concourse',
+    'Members’ Lawn', 'Rose Walk', 'Trophy Walk', 'Centre Court', 'Champions’ Lawn'];
+  function zoneNamesFor(count) {
+    var names = ZONE_POOL.slice(-count);
+    return names.slice().reverse(); // top-down: finale zone first
+  }
+  function rankedMechanics(n) {
+    return {
+      trees: 3 + (n >> 2), umbrellas: 1 + (n >= 5 ? 1 : 0),
+      walls: n >= 8 ? 3 : (n >= 6 ? 2 : 0),
+      rugs: n >= 1 ? 2 + (n >> 2) : 0,
+      sprinklers: n >= 1 ? Math.min(1 + (n >> 1), 6) : 0,
+      wheelchairs: n >= 1, kids: n >= 2,
+      photographers: n >= 3 ? Math.min(2 + (n >> 2), 6) : 0,
+      stewards: n >= 3 ? 1 + (n >= 6 ? 1 : 0) : 0,
+      fans: n >= 4 ? 1 + (n >= 7 ? 1 : 0) : 0,
+      security: n >= 4 ? 1 + (n >> 2) : 0,
+      courtCount: n >= 5 ? (n >= 7 ? 2 : 1) : 0,
+      ballsPerCourt: 2, ballSpeed: 6.0 + n * 0.14,
+      crowd: 1 + (n >= 5 ? 1 : 0),
+      slowExtra: Math.min(1 + (n >> 2), 2),             // more slow walkers, capped
+      formations: n >= 7 ? 1 : 0,                       // one "end of game" crossing crowd (L8+)
+      ballkidLines: (n >= 5 ? 1 : 0) + (n >= 8 ? 1 : 0) // lines of ball kids (L6+)
+    };
+  }
+  var RANKED_SPECS = [];
+  for (var _n = 0; _n < 10; _n++) {
+    var _rows = 44 + _n * 3;
+    var _zc = Math.max(3, Math.min(7, Math.round(_rows / 11)));
+    RANKED_SPECS.push({
+      name: NAME_ARR[_n], intro: INTRO_ARR[_n], theme: THEME_ARR[_n], warmth: WARMTH_ARR[_n],
+      cols: 21, rows: _rows, startCol: 10, zoneNames: zoneNamesFor(_zc),
+      pathZones: _n >= 3 ? [1] : [], speedBump: 0.03 * _n,
+      mechanics: rankedMechanics(_n), seed: 1000 + _n * 97,
+      berryCount: Math.round(_rows * 0.6)
+    });
+  }
+  var LEVELS = RANKED_SPECS.map(genLevel);
+
+  // ---- endless mode: same generator, run-derived seed, untracked ----
+  function makeEndlessSpec(n, seed) {
+    var rows = Math.min(46 + n * 2, 84);
+    var zc = Math.max(4, Math.min(8, Math.round(rows / 11)));
+    var diff = Math.min(4 + n, 9);
+    return {
+      name: 'Endless ' + n, intro: 'A freshly-grown ground — nothing is tracked out here.',
+      theme: THEME_ARR[(n - 1 + THEME_ARR.length) % THEME_ARR.length],
+      warmth: [0.1, 0.3, 0.6, 0.85, 0.4][n % 5],
+      cols: 21, rows: rows, startCol: 10, zoneNames: zoneNamesFor(zc),
+      pathZones: [1], speedBump: 0.02 * Math.min(n, 10),
+      mechanics: rankedMechanics(diff), seed: (seed ^ Math.imul(n, 2654435761)) >>> 0,
+      berryCount: Math.round(rows * 0.6)
+    };
+  }
+  function generateEndless(n, seed) { return genLevel(makeEndlessSpec(n, seed === undefined ? 12345 : seed)); }
 
   // ---------------------------------------------------------------------
   // Terrain construction
@@ -621,6 +709,18 @@
         return;
       }
 
+      // Pre-expanded formation members: a single instance per spec, moving
+      // horizontally across the grounds in lockstep with its formation.
+      if (spec.type === 'marcher' || spec.type === 'ballkid') {
+        game.npcs.push({
+          type: spec.type, x: spec.col, y: spec.row, px: spec.col, py: spec.row,
+          dir: spec.dir, speed: spec.speed, radius: t.radius,
+          uniform: spec.uniform || null, heading: spec.dir > 0 ? 0 : Math.PI,
+          group: null, yMin: spec.row, yMax: spec.row, chasing: false, mode: 'walk'
+        });
+        return;
+      }
+
       var count = spec.count || 1;
       var anchorX = null, anchorY = null;
       if (spec.group) {
@@ -735,17 +835,25 @@
     } else { p.moveX = 0; p.moveY = 0; }
   }
 
-  function tryDash(game) {
+  /**
+   * Dash in the direction the player ASKED for (dx, dy) — the key/gesture
+   * that triggered the dash — not whatever way they happened to be moving.
+   * Falls back to the current facing when no direction is supplied.
+   */
+  function tryDash(game, dx, dy) {
     if (game.status !== 'playing') return false;
     var p = game.player;
     if (p.stun > 0 || p.dash) return false;
     if (game.strawberries < C.DASH_COST) return false;
-    var dx = p.dirX, dy = p.dirY;
-    if (!dx && !dy) { dx = 0; dy = -1; }
+    var m = Math.sqrt((dx || 0) * (dx || 0) + (dy || 0) * (dy || 0));
+    var ux, uy;
+    if (m > 1e-6) { ux = dx / m; uy = dy / m; }
+    else { ux = p.dirX; uy = p.dirY; if (!ux && !uy) { ux = 0; uy = -1; } }
     game.strawberries -= C.DASH_COST;
     game.strawberries += (passiveDef(game).dashRefund || 0);
     game.dashesUsed++;
-    p.dash = { t: 0, dur: C.DASH_TIME, dx: dx, dy: dy };
+    p.dirX = ux; p.dirY = uy;                 // dashing turns you to face that way
+    p.dash = { t: 0, dur: C.DASH_TIME, dx: ux, dy: uy };
     game.events.push({ type: 'dash' });
     return true;
   }
@@ -887,6 +995,7 @@
       npc.px = npc.x; npc.py = npc.y;
 
       if (npc.type === 'seated') continue;
+      if (npc.type === 'marcher' || npc.type === 'ballkid') { stepMarcher(game, npc, dt); continue; }
       if (npc.type === 'steward') { stepSteward(game, npc, dt); continue; }
       if (npc.type === 'security') { stepSecurity(game, npc, dt); continue; }
       if (npc.type === 'fan') stepFanBrain(game, npc);
@@ -934,6 +1043,17 @@
       }
       moveNpc(game, npc, dt, slowMul);
     }
+  }
+
+  // Formation members march straight across their fixed row, wrapping at the
+  // edges. Because every member of a formation shares a direction and speed,
+  // the whole line (and the gap corridor cut into it) translates rigidly —
+  // so a marching crowd stays in formation and you must slot into the gap.
+  function stepMarcher(game, npc, dt) {
+    var lo = -1.5, hi = game.cols - 1 + 1.5;
+    npc.x += npc.dir * npc.speed * dt;
+    if (npc.x > hi) npc.x = lo + (npc.x - hi);
+    else if (npc.x < lo) npc.x = hi - (lo - npc.x);
   }
 
   function stepSteward(game, npc, dt) { patrolTo(game, npc, dt, npc.speed); }
@@ -1137,6 +1257,8 @@
     ITEMS: ITEMS,
     LEVELS: LEVELS,
     LEVEL: LEVELS[0],
+    RANKED_SPECS: RANKED_SPECS,
+    generateEndless: generateEndless,
     makeRng: makeRng,
     createGame: createGame,
     normalizeLoadout: normalizeLoadout,

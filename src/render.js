@@ -649,36 +649,95 @@
     }
   }
 
+  // A proper food truck: rounded cream van, red skirt, cab with a windscreen,
+  // big wheels, a roof sign, and a striped awning over a serving hatch with a
+  // chalkboard menu, condiments, a bun and a vendor inside.
   function drawTruck(ctx, game, cam) {
-    var w = TILE * 4.8, h = TILE * 1.15;
-    var x = (game.cols * TILE - w) / 2, y = TILE * 0.02 - cam - h * 0.35;
-    ellipseShadow(ctx, x + w / 2, y + h + 4, w * 0.5, 0.28);
-    var body = ctx.createLinearGradient(0, y, 0, y + h);
-    body.addColorStop(0, '#5a3a8f'); body.addColorStop(1, '#33205c');
-    ctx.fillStyle = body; roundRect(ctx, x, y + h * 0.16, w, h * 0.84, 9); ctx.fill();
-    ctx.fillStyle = '#d9cbb2'; roundRect(ctx, x + 6, y, w - 12, h * 0.3, 6); ctx.fill();
-    ctx.fillStyle = '#8f2e3c';
-    for (var i = 0; i < 6; i++) ctx.fillRect(x + 6 + i * (w - 12) / 6, y, (w - 12) / 12, h * 0.3);
-    for (var bb = 0; bb <= 8; bb++) {
-      var bx = x + 8 + bb * (w - 16) / 8, tw = 0.6 + 0.4 * Math.sin(game.time * 4 + bb);
-      if (S.glow > 0.15) { ctx.fillStyle = COMMON.bulbGlow + (0.3 * tw * S.glow) + ')'; ctx.beginPath(); ctx.arc(bx, y + h * 0.32, 6, 0, 7); ctx.fill(); }
-      ctx.fillStyle = S.glow > 0.15 ? COMMON.bulb : '#efe0c0'; ctx.beginPath(); ctx.arc(bx, y + h * 0.32, 2, 0, 7); ctx.fill();
-    }
-    ctx.fillStyle = '#ffdf9e'; ctx.fillRect(x + w * 0.12, y + h * 0.34, w * 0.5, h * 0.42);
-    if (S.dark) {
-      var hg = ctx.createRadialGradient(x + w * 0.37, y + h * 0.55, 4, x + w * 0.37, y + h * 0.55, w * 0.5);
-      hg.addColorStop(0, COMMON.bulbGlow + '0.25)'); hg.addColorStop(1, COMMON.bulbGlow + '0)');
-      ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(x + w * 0.37, y + h * 0.55, w * 0.5, 0, 7); ctx.fill();
-    }
-    ctx.fillStyle = '#241a38'; ctx.beginPath(); ctx.arc(x + w * 0.3, y + h * 0.62, 7, 0, 7); ctx.fill();
-    ctx.fillRect(x + w * 0.3 - 9, y + h * 0.62 + 4, 18, 12);
-    ctx.fillStyle = '#f5eedd'; ctx.font = 'bold ' + Math.round(TILE * 0.32) + 'px system-ui, sans-serif';
+    var w = TILE * 5.2, h = TILE * 1.4;
+    var x = (game.cols * TILE - w) / 2, y = TILE * 0.02 - cam - h * 0.42;
+    var night = S.dark;
+    ellipseShadow(ctx, x + w / 2, y + h + 5, w * 0.52, 0.3);
+
+    // wheels (behind the body)
+    var wy = y + h * 0.98;
+    [0.2, 0.8].forEach(function (fx) {
+      var wx = x + w * fx;
+      ctx.fillStyle = '#15151b'; ctx.beginPath(); ctx.arc(wx, wy, TILE * 0.24, 0, 7); ctx.fill();
+      ctx.fillStyle = '#c9ced6'; ctx.beginPath(); ctx.arc(wx, wy, TILE * 0.11, 0, 7); ctx.fill();
+      ctx.fillStyle = '#8b929c'; ctx.beginPath(); ctx.arc(wx, wy, TILE * 0.05, 0, 7); ctx.fill();
+      ctx.strokeStyle = '#6b7078'; ctx.lineWidth = 1.5;
+      for (var s = 0; s < 5; s++) { var a = s * 1.256 + 0.3; ctx.beginPath(); ctx.moveTo(wx, wy); ctx.lineTo(wx + Math.cos(a) * TILE * 0.1, wy + Math.sin(a) * TILE * 0.1); ctx.stroke(); }
+    });
+
+    // body
+    var bodyY = y + h * 0.16, bodyH = h * 0.82;
+    var g = ctx.createLinearGradient(0, bodyY, 0, bodyY + bodyH);
+    g.addColorStop(0, '#f4ead2'); g.addColorStop(0.55, '#efe0c2'); g.addColorStop(1, '#e2cfa8');
+    ctx.fillStyle = g; roundRect(ctx, x, bodyY, w, bodyH, 12); ctx.fill();
+    ctx.fillStyle = '#d0403f'; roundRect(ctx, x, bodyY + bodyH * 0.7, w, bodyH * 0.3, 10); ctx.fill();
+    ctx.fillStyle = '#b7332f'; ctx.fillRect(x, bodyY + bodyH * 0.68, w, 3);
+    // cab (right) with windscreen + mirror + headlight
+    ctx.fillStyle = '#e7d7b4'; roundRect(ctx, x + w * 0.72, bodyY, w * 0.28, bodyH * 0.72, 10); ctx.fill();
+    var glass = ctx.createLinearGradient(0, bodyY, 0, bodyY + bodyH * 0.45);
+    glass.addColorStop(0, '#bfe0ea'); glass.addColorStop(1, '#8fb9c8');
+    ctx.fillStyle = glass; roundRect(ctx, x + w * 0.75, bodyY + bodyH * 0.1, w * 0.2, bodyH * 0.34, 6); ctx.fill();
+    ctx.fillStyle = '#c9ced6'; ctx.fillRect(x + w * 0.99, bodyY + bodyH * 0.2, 5, 4);
+    ctx.fillStyle = night ? '#fff2c0' : '#e9dcc0';
+    ctx.beginPath(); ctx.arc(x + w * 0.985, bodyY + bodyH * 0.6, TILE * 0.07, 0, 7); ctx.fill();
+
+    // roof sign
+    var sgy = y - h * 0.06;
+    ctx.fillStyle = '#7a1f28'; roundRect(ctx, x + w * 0.16, sgy - h * 0.24, w * 0.5, h * 0.3, 6); ctx.fill();
+    ctx.fillStyle = '#fff6e6'; ctx.font = 'bold ' + Math.round(TILE * 0.34) + 'px Georgia, serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('LUNCH', x + w * 0.78, y + h * 0.5);
-    ctx.fillStyle = '#d8262f'; ctx.beginPath(); ctx.arc(x + w * 0.78, y + h * 0.8, TILE * 0.1, 0, 7); ctx.fill();
-    ctx.fillStyle = COMMON.black;
-    ctx.beginPath(); ctx.arc(x + w * 0.18, y + h, TILE * 0.14, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(x + w * 0.82, y + h, TILE * 0.14, 0, 7); ctx.fill();
+    ctx.fillText('LUNCH', x + w * 0.37, sgy - h * 0.09);
+    ctx.fillStyle = '#e23b46'; ctx.beginPath(); ctx.arc(x + w * 0.2, sgy - h * 0.09, TILE * 0.11, 0, 7); ctx.fill();
+    ctx.fillStyle = '#3f9143'; ctx.beginPath(); ctx.ellipse(x + w * 0.2, sgy - h * 0.15, TILE * 0.07, TILE * 0.03, 0, 0, 7); ctx.fill();
+
+    // serving hatch + chalkboard menu + counter
+    var hx = x + w * 0.06, hw = w * 0.6, hyv = bodyY + bodyH * 0.14, hh = bodyH * 0.5;
+    ctx.fillStyle = '#2a2320'; roundRect(ctx, hx, hyv, hw, hh, 5); ctx.fill();
+    ctx.fillStyle = '#20302a'; ctx.fillRect(hx + 6, hyv + 5, hw * 0.42, hh - 10);
+    ctx.strokeStyle = 'rgba(240,240,230,0.5)'; ctx.lineWidth = 1;
+    for (var ml = 0; ml < 4; ml++) { var ly = hyv + 12 + ml * (hh - 18) / 4; ctx.beginPath(); ctx.moveTo(hx + 10, ly); ctx.lineTo(hx + 6 + hw * 0.34, ly); ctx.stroke(); }
+    ctx.fillStyle = '#e6b84a'; ctx.fillRect(hx + 10, hyv + 7, hw * 0.2, 2);
+    var cy2 = hyv + hh - 4;
+    ctx.fillStyle = '#cdb183'; ctx.fillRect(hx, cy2, hw, 5);
+    ctx.fillStyle = '#d84b3f'; ctx.fillRect(hx + hw * 0.56, cy2 - 9, 4, 9);
+    ctx.fillStyle = '#e8c33a'; ctx.fillRect(hx + hw * 0.62, cy2 - 9, 4, 9);
+    ctx.fillStyle = '#e2a15a'; roundRect(ctx, hx + hw * 0.72, cy2 - 6, 14, 6, 3); ctx.fill();
+    ctx.fillStyle = '#c0392b'; ctx.fillRect(hx + hw * 0.73, cy2 - 5, 12, 2);
+    ctx.fillStyle = '#1a1520'; ctx.beginPath(); ctx.arc(hx + hw * 0.5, hyv + hh * 0.42, 7, 0, 7); ctx.fill();
+    ctx.fillRect(hx + hw * 0.5 - 10, hyv + hh * 0.42 + 5, 20, hh * 0.4);
+    if (night) {
+      var hg = ctx.createRadialGradient(hx + hw * 0.5, hyv + hh * 0.5, 4, hx + hw * 0.5, hyv + hh * 0.5, hw * 0.7);
+      hg.addColorStop(0, COMMON.bulbGlow + '0.22)'); hg.addColorStop(1, COMMON.bulbGlow + '0)');
+      ctx.fillStyle = hg; ctx.fillRect(hx - 10, hyv - 10, hw + 20, hh + 20);
+    }
+
+    // striped scalloped awning + strung bulbs
+    var ay = hyv - h * 0.12, stripeW = hw / 8;
+    for (var stp = 0; stp < 8; stp++) {
+      ctx.fillStyle = stp % 2 === 0 ? '#d0403f' : '#f4ead2';
+      ctx.beginPath();
+      ctx.moveTo(hx + stp * stripeW, ay); ctx.lineTo(hx + (stp + 1) * stripeW, ay);
+      ctx.lineTo(hx + (stp + 1) * stripeW, ay + h * 0.12);
+      ctx.lineTo(hx + stp * stripeW + stripeW * 0.5, ay + h * 0.17);
+      ctx.lineTo(hx + stp * stripeW, ay + h * 0.12); ctx.closePath(); ctx.fill();
+    }
+    for (var bb = 0; bb <= 8; bb++) {
+      var bx = hx + bb * hw / 8, tw = 0.6 + 0.4 * Math.sin(game.time * 4 + bb);
+      if (S.glow > 0.15) { ctx.fillStyle = COMMON.bulbGlow + (0.3 * tw * S.glow) + ')'; ctx.beginPath(); ctx.arc(bx, ay + h * 0.19, 5, 0, 7); ctx.fill(); }
+      ctx.fillStyle = S.glow > 0.15 ? COMMON.bulb : '#e9d9b4'; ctx.beginPath(); ctx.arc(bx, ay + h * 0.19, 1.8, 0, 7); ctx.fill();
+    }
+
+    // steam
+    ctx.fillStyle = 'rgba(255,255,255,0.32)';
+    for (var sp = 0; sp < 3; sp++) {
+      var tt = (game.time * 0.7 + sp * 0.33) % 1;
+      ctx.beginPath();
+      ctx.arc(hx + hw * (0.3 + sp * 0.16) + Math.sin(game.time * 2 + sp) * 4, hyv - 6 - tt * 26, 3 + tt * 6, 0, 7); ctx.fill();
+    }
   }
 
   function drawSprinklerHead(ctx, game, s, cam) {
@@ -821,6 +880,18 @@
         ctx.textAlign = 'center';
         ctx.fillText('!', cx, sy - TILE * 0.85 * sc - Math.abs(Math.sin(game.time * 8)) * 4);
       }
+    } else if (npc.type === 'marcher') {
+      // uniformed procession — reads as a deliberate crossing crowd
+      drawFigure(ctx, cx, sy, sc, { bodyW: 0.5, bodyH: 0.5, headR: 0.12,
+        body: '#3a4a6a', legs: '#26304a', skin: skin, hat: 'cap', hatColor: '#232d47',
+        phase: phase, moving: moving, facing: facing });
+    } else if (npc.type === 'ballkid') {
+      var uni = npc.uniform === 'purple' ? '#7a52ad' : '#3f9a55';
+      drawFigure(ctx, cx, sy, sc, { bodyW: 0.28, bodyH: 0.3, headR: 0.10,
+        body: uni, legs: darken(uni, 0.3), skin: skin, hat: 'cap', hatColor: darken(uni, 0.15),
+        phase: phase * 1.2, moving: moving, facing: facing });
+      ctx.fillStyle = '#d6f24a'; // a tennis ball in hand
+      ctx.beginPath(); ctx.arc(cx + facing * TILE * 0.16 * sc, sy - TILE * 0.18 * sc, TILE * 0.07 * sc, 0, 7); ctx.fill();
     } else { // posh
       drawFigure(ctx, cx, sy, sc, { bodyW: 0.5, bodyH: 0.46, headR: 0.12, body: outfit, skin: skin,
         hat: 'sun', phase: phase, moving: moving, facing: facing });

@@ -1,18 +1,17 @@
 /*
- * Strawberry Rush — input handling (v4: free movement + double-tap dash).
+ * Strawberry Rush — input handling (v5: directional dash).
  *
  * Keyboard: arrows / WASD are read as a live analog vector — hold any
- * combination for 8-way (diagonal) movement; the logic normalizes it so
- * diagonals aren't faster. Dash is triggered by EITHER:
- *   - double-tapping a movement key (quick press-press of the same
- *     direction), now that continuous movement makes this comfortable, or
- *   - pressing Shift (kept as an explicit alternative).
+ * combination for 8-way movement; the logic normalizes it. Dash fires in the
+ * direction you ASK for, not the way you were drifting:
+ *   - double-tapping a direction dashes THAT direction, and
+ *   - Shift dashes in the direction currently held (or your facing if none).
  *
- * Touch: press and drag anywhere = virtual joystick; a quick tap = action;
- * a two-finger tap = dash.
+ * Touch: press and drag = virtual joystick; a quick tap = action; a
+ * two-finger tap = dash (in the current drag direction, else facing).
  *
- * This module knows nothing about game rules; the shell polls
- * getMoveVector() every tick and receives onDash/onAction callbacks.
+ * The shell polls getMoveVector() each tick and receives onDash(dx, dy) /
+ * onAction() callbacks.
  */
 (function (root) {
   'use strict';
@@ -20,47 +19,42 @@
   var TAP_MAX_PX = 14;
   var TAP_MAX_MS = 260;
   var DRAG_DEADZONE = 12;
-  var DOUBLE_TAP_MS = 280;   // window for a double-tap of the same key
+  var DOUBLE_TAP_MS = 280;
 
   var KEY_VECS = {
-    ArrowUp: [0, -1], KeyW: [0, -1],
-    ArrowDown: [0, 1], KeyS: [0, 1],
-    ArrowLeft: [-1, 0], KeyA: [-1, 0],
-    ArrowRight: [1, 0], KeyD: [1, 0]
+    ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1],
+    ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0]
   };
-  // Group opposite keys so a double-tap reads by direction, not physical key.
   var DIR_OF = {
     ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down',
     ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right'
   };
+  var DIR_VEC = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 
-  /**
-   * onDash() — fired on double-tap / Shift / two-finger tap.
-   * onAction() — fired for space/enter/tap (menu advance, restart).
-   * Returns { getMoveVector } for the shell's per-tick polling.
-   */
   function createInput(onDash, onAction) {
     var down = {};            // e.code -> true while held
-    var touchVec = null;      // {x, y} unit-ish vector while dragging
+    var touchVec = null;      // {x, y} while dragging
     var lastTapDir = null, lastTapTime = 0;
+
+    function keysVec() {
+      var x = 0, y = 0;
+      for (var code in down) { var v = KEY_VECS[code]; if (v) { x += v[0]; y += v[1]; } }
+      return { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) };
+    }
 
     root.addEventListener('keydown', function (e) {
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
-        if (!e.repeat) onDash();
+        if (!e.repeat) { var v = keysVec(); onDash(v.x, v.y); }   // dash the held direction
         return;
       }
       if (KEY_VECS[e.code]) {
         e.preventDefault();
         if (!e.repeat) {
-          // Double-tap detection (fresh presses only, not OS auto-repeat).
-          var dir = DIR_OF[e.code];
-          var now = performance.now();
+          var dir = DIR_OF[e.code], now = performance.now();
           if (dir === lastTapDir && now - lastTapTime < DOUBLE_TAP_MS) {
-            onDash();
-            lastTapDir = null; // consume so a triple-tap isn't two dashes
-          } else {
-            lastTapDir = dir; lastTapTime = now;
-          }
+            var d = DIR_VEC[dir]; onDash(d[0], d[1]);            // dash the tapped direction
+            lastTapDir = null;
+          } else { lastTapDir = dir; lastTapTime = now; }
         }
         down[e.code] = true;
       } else if (e.code === 'Space' || e.code === 'Enter') {
@@ -70,15 +64,13 @@
     });
 
     root.addEventListener('keyup', function (e) { delete down[e.code]; });
-
-    // Dropped keyups (alt-tab etc.) shouldn't leave the player running.
     root.addEventListener('blur', function () { down = {}; touchVec = null; });
 
     // ------------------------------------------------------------- touch
     var touchStart = null;
     root.addEventListener('touchstart', function (e) {
       var t = e.changedTouches[0];
-      if (e.touches.length >= 2) { onDash(); return; }
+      if (e.touches.length >= 2) { var tv = touchVec || { x: 0, y: 0 }; onDash(tv.x, tv.y); return; }
       touchStart = { x: t.clientX, y: t.clientY, time: performance.now() };
     }, { passive: true });
 
@@ -102,15 +94,7 @@
     }, { passive: true });
 
     return {
-      getMoveVector: function () {
-        if (touchVec) return { x: touchVec.x, y: touchVec.y };
-        var x = 0, y = 0;
-        for (var code in down) {
-          var v = KEY_VECS[code];
-          if (v) { x += v[0]; y += v[1]; }
-        }
-        return { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) };
-      }
+      getMoveVector: function () { return touchVec ? { x: touchVec.x, y: touchVec.y } : keysVec(); }
     };
   }
 

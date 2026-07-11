@@ -12,13 +12,8 @@
 -->
 <style>
   :root {
-    --ink: #0c1220;
-    --cream: #eef0f6;
-    --accent: #7ef0d0;
-    --straw: #ff6b81;
-    --gold: #ffd650;
-    --glass: rgba(10, 14, 28, 0.62);
-    --glass-edge: rgba(255, 255, 255, 0.10);
+    --ink: #0c1220; --cream: #eef0f6; --accent: #7ef0d0; --straw: #ff6b81;
+    --gold: #ffd650; --glass: rgba(10, 14, 28, 0.62); --glass-edge: rgba(255, 255, 255, 0.10);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; overflow: hidden; background: var(--ink); }
@@ -30,10 +25,8 @@
     padding: 6px 13px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
     font-size: clamp(0.74rem, 1.5vw, 0.92rem); line-height: 1.2; white-space: nowrap;
   }
-  #hud {
-    position: fixed; top: 14px; left: 14px; right: 14px;
-    display: flex; gap: 7px; align-items: center; flex-wrap: wrap; pointer-events: none; z-index: 2;
-  }
+  #hud { position: fixed; top: 14px; left: 14px; right: 14px;
+    display: flex; gap: 7px; align-items: center; flex-wrap: wrap; pointer-events: none; z-index: 2; }
   #hud .spacer { flex: 1; }
   #hud-hearts { letter-spacing: 0.10em; }
   #hud-berries { font-weight: 600; }
@@ -63,46 +56,40 @@
     opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s; z-index: 4; }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-  .screen {
-    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  .screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
     background: rgba(6, 9, 20, 0.74); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
-    padding: 20px; text-align: center; z-index: 5; overflow-y: auto;
-  }
+    padding: 20px; text-align: center; z-index: 5; overflow-y: auto; }
   .screen.hidden { display: none; }
   #overlay-title { font-size: clamp(1.7rem, 6vw, 3.1rem); font-weight: 800; letter-spacing: 0.03em;
     margin-bottom: 12px; text-shadow: 0 0 30px rgba(255,107,129,0.35); }
   #overlay-sub { font-size: clamp(0.88rem, 2.2vw, 1.05rem); max-width: 54ch; color: #ccd4e2; line-height: 1.55; }
   .btn-row { display: flex; gap: 12px; margin-top: 22px; flex-wrap: wrap; justify-content: center; }
-  button.btn {
-    font: inherit; font-weight: 600; color: var(--ink); background: var(--accent);
-    border: none; border-radius: 999px; padding: 11px 24px; cursor: pointer;
-    transition: transform 0.1s, filter 0.1s;
-  }
+  button.btn { font: inherit; font-weight: 600; color: var(--ink); background: var(--accent);
+    border: none; border-radius: 999px; padding: 11px 24px; cursor: pointer; transition: transform 0.1s, filter 0.1s; }
   button.btn:hover { filter: brightness(1.08); }
   button.btn:active { transform: scale(0.96); }
   button.btn.ghost { background: transparent; color: var(--cream); border: 1px solid var(--glass-edge); }
   button.btn:disabled { opacity: 0.4; cursor: default; filter: none; }
+  .name-input { font: inherit; font-size: 1rem; text-align: center; color: var(--cream);
+    background: rgba(255,255,255,0.06); border: 1px solid var(--glass-edge); border-radius: 10px;
+    padding: 10px 14px; margin-top: 18px; width: min(280px, 80vw); }
 
   /* ---- shop ---- */
   #shop { align-items: stretch; }
   .shop-inner { width: min(880px, 100%); margin: auto; }
   #shop h2 { font-size: clamp(1.4rem, 4vw, 2.1rem); font-weight: 800; text-align: center; }
-  .shop-bank { text-align: center; color: var(--gold); font-weight: 700; font-size: 1.15rem; margin: 4px 0 14px; }
-  .shop-section-title { font-size: 0.82rem; letter-spacing: 0.14em; text-transform: uppercase;
-    color: #9fb0c8; margin: 16px 0 8px; text-align: left; }
+  .shop-bank { text-align: center; color: var(--gold); font-weight: 700; font-size: 1.1rem; margin: 4px 0 14px; }
+  .shop-section-title { font-size: 0.82rem; letter-spacing: 0.14em; text-transform: uppercase; color: #9fb0c8; margin: 16px 0 8px; text-align: left; }
   .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-  .card {
-    background: rgba(255,255,255,0.035); border: 1px solid var(--glass-edge); border-radius: 12px;
-    padding: 12px; text-align: left; display: flex; flex-direction: column; gap: 6px;
-  }
+  .card { background: rgba(255,255,255,0.035); border: 1px solid var(--glass-edge); border-radius: 12px;
+    padding: 12px; text-align: left; display: flex; flex-direction: column; gap: 6px; }
   .card.equipped { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
   .card .name { font-weight: 700; font-size: 0.98rem; }
   .card .name .tag { font-size: 0.68rem; color: var(--ink); background: var(--accent);
     border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
   .card .desc { font-size: 0.8rem; color: #b9c2d2; line-height: 1.35; flex: 1; }
   .card .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  button.mini { font: inherit; font-size: 0.78rem; font-weight: 600; border-radius: 8px;
-    padding: 6px 11px; cursor: pointer; border: none; }
+  button.mini { font: inherit; font-size: 0.78rem; font-weight: 600; border-radius: 8px; padding: 6px 11px; cursor: pointer; border: none; }
   button.mini.buy { background: var(--gold); color: #2a2410; }
   button.mini.equip { background: rgba(126,240,208,0.18); color: var(--accent); border: 1px solid rgba(126,240,208,0.4); }
   button.mini.on { background: var(--accent); color: var(--ink); }
@@ -120,6 +107,19 @@
   .hb-row { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.06); align-items: baseline; }
   .hb-row .k { flex: 0 0 42%; font-weight: 600; color: var(--cream); }
   .hb-row .v { flex: 1; color: #b9c2d2; font-size: 0.88rem; line-height: 1.4; }
+
+  /* ---- leaderboard ---- */
+  .lb-inner { width: min(640px, 100%); margin: auto; }
+  #leaderboard h2 { font-size: clamp(1.5rem, 4.5vw, 2.3rem); font-weight: 800; text-align: center; }
+  .lb-sub { text-align: center; color: #b9c2d2; margin: 4px 0 16px; font-size: 0.92rem; }
+  .lb-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+  .lb-table th { text-align: left; color: #9fb0c8; font-size: 0.72rem; letter-spacing: 0.1em;
+    text-transform: uppercase; padding: 6px 8px; border-bottom: 1px solid var(--glass-edge); }
+  .lb-table td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .lb-table td.num { font-variant-numeric: tabular-nums; }
+  .lb-table tr.you { color: var(--accent); font-weight: 700; }
+  .lb-rank { color: var(--gold); font-weight: 700; }
+  .lb-empty { text-align: center; color: #8b95a8; padding: 20px; }
 
   #hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
     font-size: 0.72rem; color: rgba(230,235,245,0.42); white-space: nowrap; pointer-events: none; z-index: 2; }
@@ -148,17 +148,19 @@
   <div id="overlay" class="screen hidden">
     <div id="overlay-title"></div>
     <div id="overlay-sub"></div>
+    <div id="overlay-extra"></div>
     <div id="overlay-buttons" class="btn-row"></div>
   </div>
 
   <div id="shop" class="screen hidden">
     <div class="shop-inner">
-      <h2>The Clubhouse Shop 🍓</h2>
+      <h2 id="shop-title">The Clubhouse Shop 🍓</h2>
       <div class="shop-bank" id="shop-bank"></div>
       <div id="shop-body"></div>
       <div class="btn-row">
         <button class="btn" id="shop-continue">Continue</button>
         <button class="btn ghost" id="shop-handbook">Handbook</button>
+        <button class="btn ghost" id="shop-quit">Quit to menu</button>
       </div>
     </div>
   </div>
@@ -169,6 +171,15 @@
       <div class="hb-lead">Everything you’ll meet on the grounds — and what counters it.</div>
       <div id="handbook-body"></div>
       <div class="btn-row"><button class="btn" id="handbook-close">Close</button></div>
+    </div>
+  </div>
+
+  <div id="leaderboard" class="screen hidden">
+    <div class="lb-inner">
+      <h2>🏆 Leaderboard</h2>
+      <div class="lb-sub" id="lb-sub">Ranked runs — most strawberries banked, fastest time.</div>
+      <div id="leaderboard-body"></div>
+      <div id="leaderboard-buttons" class="btn-row"></div>
     </div>
   </div>
 
