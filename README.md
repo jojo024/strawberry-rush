@@ -67,6 +67,61 @@ A **Settings** screen (from the menu) lets you tune dashing:
 
 Settings persist in the browser.
 
+## Global leaderboard (optional Supabase backend)
+
+Out of the box the leaderboard is **local** to each browser. To make it
+**global** (shared by everyone playing your build), point it at a free
+[Supabase](https://supabase.com) project — the game submits and reads scores
+over its REST API, and falls back to the local cache when offline or
+unconfigured.
+
+1. Create a free Supabase project. In the **SQL editor**, run:
+
+   ```sql
+   create table if not exists public.scores (
+     id bigint generated always as identity primary key,
+     name text not null,
+     score int not null,
+     berries int not null default 0,
+     time_sec real not null default 0,
+     golds int not null default 0,
+     perfect boolean not null default false,
+     created_at timestamptz not null default now()
+   );
+   alter table public.scores enable row level security;
+
+   -- anyone may read the board
+   create policy "read scores"  on public.scores for select to anon using (true);
+
+   -- anyone may submit, with light sanity checks (client-only games are spoofable)
+   create policy "insert scores" on public.scores for insert to anon
+     with check (
+       char_length(name) between 1 and 16
+       and score between -100000 and 1000000
+       and berries >= 0 and golds between 0 and 10
+     );
+   ```
+
+2. In **Project settings → API**, copy the **Project URL** and the **anon /
+   public** key.
+3. Paste them into [`src/config.js`](src/config.js):
+
+   ```js
+   window.LEADERBOARD_CONFIG = {
+     url: 'https://YOURPROJECT.supabase.co',
+     anonKey: 'YOUR-ANON-KEY'
+   };
+   ```
+
+That's it — finishing a ranked run now posts to the shared board, and the
+Leaderboard screen shows the global top 50 (with your row highlighted).
+
+Notes: the anon key is meant to be public; row-level security controls what it
+can do. For the online board, serve the game over http(s) (e.g. GitHub Pages) —
+from `file://` some browsers block the request and it falls back to local. A
+client-only leaderboard is inherently spoofable; the checks above are basic
+anti-spam, not real anti-cheat.
+
 ## The shop & loadout
 
 Between every level you visit the clubhouse shop. Within a run, purchases

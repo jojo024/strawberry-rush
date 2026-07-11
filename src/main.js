@@ -241,39 +241,80 @@
 
   function toMenu() { showMenu(); }
 
-  // ---- leaderboard --------------------------------------------------------
+  // ---- leaderboard (global via Supabase, with a local fallback cache) ------
+  // Configure src/config.js with your Supabase URL + anon key to go global.
+  // When unset (or offline) the board falls back to this browser's local cache.
+  var LB = (window.LEADERBOARD_CONFIG && window.LEADERBOARD_CONFIG.url) ? window.LEADERBOARD_CONFIG : { url: '', anonKey: '' };
+  function lbEnabled() { return !!(LB.url && LB.anonKey && typeof fetch === 'function'); }
+  function lbHeaders() { return { apikey: LB.anonKey, Authorization: 'Bearer ' + LB.anonKey }; }
+  function localTop() { return (profile.leaderboard || []).slice().sort(function (a, b) { return b.score - a.score; }).slice(0, 50); }
+
   function recordScore(name, score, perfect, golds) {
     name = (name || 'Player').toString().slice(0, 16).trim() || 'Player';
+    perfect = !!perfect; golds = Math.max(0, Math.min(RANKED_COUNT, golds || 0));
+    score = Math.max(-100000, Math.min(1000000, Math.round(score)));
     profile.lastName = name;
-    profile.leaderboard.push({ name: name, berries: shell.bank, time: shell.totalTime,
-      score: score, perfect: !!perfect, golds: golds || 0, date: Date.now() });
+    var entry = { name: name, berries: shell.bank, time: shell.totalTime, score: score, perfect: perfect, golds: golds, date: Date.now() };
+    shell.myEntry = entry;
+    // Local cache (also the offline board).
+    profile.leaderboard.push(entry);
     profile.leaderboard.sort(function (a, b) { return b.score - a.score; });
-    profile.leaderboard = profile.leaderboard.slice(0, 20);
+    profile.leaderboard = profile.leaderboard.slice(0, 50);
     saveProfile();
+    // Best-effort global submit.
+    if (lbEnabled()) {
+      try {
+        fetch(LB.url + '/rest/v1/scores', {
+          method: 'POST',
+          headers: Object.assign({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }, lbHeaders()),
+          body: JSON.stringify({ name: name, score: score, berries: shell.bank, time_sec: Math.round(shell.totalTime * 10) / 10, golds: golds, perfect: perfect })
+        }).catch(function () {});
+      } catch (e) {}
+    }
+  }
+
+  function lbFetchTop(cb) {
+    if (!lbEnabled()) { cb(localTop(), 'local'); return; }
+    try {
+      fetch(LB.url + '/rest/v1/scores?select=name,score,berries,time_sec,golds,perfect&order=score.desc&limit=50', { headers: lbHeaders() })
+        .then(function (r) { if (!r.ok) throw new Error('http'); return r.json(); })
+        .then(function (rows) {
+          cb(rows.map(function (r) { return { name: r.name, score: r.score, berries: r.berries, time: r.time_sec, golds: r.golds, perfect: r.perfect }; }), 'global');
+        })
+        .catch(function () { cb(localTop(), 'offline'); });
+    } catch (e) { cb(localTop(), 'offline'); }
   }
 
   function showLeaderboard(note) {
-    buildLeaderboard(note);
     shell.mode = 'leaderboard';
     hideAllScreens(); show(hud.leaderboard);
+    renderLbButtons();
+    hud.lbSub.textContent = lbEnabled() ? 'Loading global scores…' : 'Local scores (set up a backend in src/config.js to go global).';
+    hud.lbBody.innerHTML = '<div class="lb-empty">Loading…</div>';
+    lbFetchTop(function (list, src) { renderLbRows(list, src, note); });
   }
-  function buildLeaderboard(note) {
-    hud.lbSub.textContent = note || 'Ranked runs — score = 🍓 × 10 − seconds, +' + PERFECT_BONUS + ' for a ⭐ perfect (all 10 goldens).';
-    var lb = profile.leaderboard || [];
-    if (!lb.length) {
+
+  function renderLbRows(list, src, note) {
+    var srcLabel = src === 'global' ? '🌍 Global' : (src === 'offline' ? '📴 Offline — local scores' : '💾 Local scores');
+    hud.lbSub.textContent = (note ? note + '  ·  ' : '') + srcLabel +
+      '  ·  score = 🍓×10 − seconds, +' + PERFECT_BONUS + ' for a ⭐ perfect run.';
+    if (!list.length) {
       hud.lbBody.innerHTML = '<div class="lb-empty">No ranked runs yet. Finish all ' + RANKED_COUNT + ' levels to make the board.</div>';
-    } else {
-      var newest = lb.reduce(function (m, e, i) { return e.date > lb[m].date ? i : m; }, 0);
-      var rows = lb.map(function (e, i) {
-        var you = (i === newest) ? ' class="you"' : '';
-        var star = e.perfect ? ' ⭐' : '';
-        var golds = (e.golds != null ? e.golds : (e.perfect ? RANKED_COUNT : 0));
-        return '<tr' + you + '><td class="lb-rank">#' + (i + 1) + '</td><td>' + escapeHtml(e.name) +
-          '</td><td class="num">' + golds + '/' + RANKED_COUNT + ' 🌟</td><td class="num">' + e.berries + ' 🍓</td><td class="num">' + fmtTime(e.time) +
-          '</td><td class="num">' + e.score + star + '</td></tr>';
-      }).join('');
-      hud.lbBody.innerHTML = '<table class="lb-table"><thead><tr><th></th><th>Name</th><th>Gold</th><th>🍓</th><th>Time</th><th>Score</th></tr></thead><tbody>' + rows + '</tbody></table>';
+      return;
     }
+    var mine = shell.myEntry;
+    var rows = list.map(function (e, i) {
+      var isMine = mine && e.name === mine.name && e.score === mine.score && Math.abs((e.time || 0) - mine.time) < 0.05;
+      var star = e.perfect ? ' ⭐' : '';
+      var golds = (e.golds != null ? e.golds : (e.perfect ? RANKED_COUNT : 0));
+      return '<tr' + (isMine ? ' class="you"' : '') + '><td class="lb-rank">#' + (i + 1) + '</td><td>' + escapeHtml(e.name) +
+        '</td><td class="num">' + golds + '/' + RANKED_COUNT + ' 🌟</td><td class="num">' + e.berries + ' 🍓</td><td class="num">' + fmtTime(e.time || 0) +
+        '</td><td class="num">' + e.score + star + '</td></tr>';
+    }).join('');
+    hud.lbBody.innerHTML = '<table class="lb-table"><thead><tr><th></th><th>Name</th><th>Gold</th><th>🍓</th><th>Time</th><th>Score</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  function renderLbButtons() {
     hud.lbButtons.innerHTML = '';
     [ { label: 'Play ranked again', onClick: startRanked },
       { label: 'Endless mode', onClick: startEndless },

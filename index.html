@@ -5,10 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>Strawberry Rush 🍓</title>
 <!--
-  CSP note: all scripts are same-origin files, no inline JS, no eval, no
-  external resources. When hosting, serve with:
-  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self'
-  (No meta tag here so the game also runs from a plain file:// double-click.)
+  CSP note: all scripts are same-origin files, no inline JS, no eval. The only
+  optional external request is the global leaderboard (Supabase), if configured
+  in src/config.js. When hosting, serve with:
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self'; connect-src https://*.supabase.co
+  (Drop connect-src if you don't use the online leaderboard. No meta tag here so
+  the game also runs from a plain file:// double-click; the board falls back to
+  local scores when offline or unconfigured.)
 -->
 <style>
   :root {
@@ -215,6 +218,7 @@
 
   <div id="hint">move: arrows / WASD · dash: double-tap a direction or Shift · swipe on touch</div>
 
+  <script src="src/config.js"></script>
   <script src="src/logic.js"></script>
   <script src="src/render.js"></script>
   <script src="src/input.js"></script>
