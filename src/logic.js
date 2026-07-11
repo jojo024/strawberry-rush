@@ -435,12 +435,16 @@
 
     var npcs = [];
     zones.forEach(function (z, i) {
-      var groups = 1 + (rng() < 0.55 ? 1 : 0) + (m.crowd > 1 ? 1 : 0);
+      // Roaming crowd — roughly doubled to fill the now-much-bigger grounds.
+      var groups = 2 + (rng() < 0.6 ? 1 : 0) + (m.crowd > 1 ? 1 : 0);
       for (var g = 0; g < groups; g++) npcs.push({ type: 'posh', count: 3, rowMin: z.rowMin, rowMax: z.rowMax, group: 'p' + i + '_' + g });
-      // A dollop of extra slow-moving picnickers everywhere — busier grounds.
-      npcs.push({ type: 'posh', count: 2 + (m.slowExtra || 0), rowMin: z.rowMin, rowMax: z.rowMax });
-      if (m.wheelchairs) npcs.push({ type: 'wheelchair', count: 1 + (rng() < 0.4 ? 1 : 0), rowMin: z.rowMin, rowMax: z.rowMax });
-      if (m.kids && rng() < 0.85) npcs.push({ type: 'kid', count: 3, rowMin: z.rowMin, rowMax: z.rowMax, group: 'k' + i });
+      // A generous helping of loose slow-moving picnickers everywhere.
+      npcs.push({ type: 'posh', count: 4 + 2 * (m.slowExtra || 0), rowMin: z.rowMin, rowMax: z.rowMax });
+      if (m.wheelchairs) npcs.push({ type: 'wheelchair', count: 2 + (rng() < 0.5 ? 1 : 0), rowMin: z.rowMin, rowMax: z.rowMax });
+      if (m.kids) {
+        npcs.push({ type: 'kid', count: 3, rowMin: z.rowMin, rowMax: z.rowMax, group: 'k' + i + 'a' });
+        if (rng() < 0.7) npcs.push({ type: 'kid', count: 3, rowMin: z.rowMin, rowMax: z.rowMax, group: 'k' + i + 'b' });
+      }
     });
     seated.forEach(function (s) { npcs.push(s); });
     for (var fi = 0; fi < (m.fans || 0); fi++) { var fn = placeFan(rng, occ, zones, hedgeSet, cols); if (fn) npcs.push(fn); }
